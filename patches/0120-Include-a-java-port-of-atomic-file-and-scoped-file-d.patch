@@ -184,3 +184,79 @@ index 0000000000000..7934567ff189e
 +        }
 +    }
 +}
+diff --git a/vanadium/android_config/proto/java/src/app/vanadium/config/SubresourceFilterComponentUtils.java b/vanadium/android_config/proto/java/src/app/vanadium/config/SubresourceFilterComponentUtils.java
+new file mode 100644
+index 0000000000000..a42d38734d266
+--- /dev/null
++++ b/vanadium/android_config/proto/java/src/app/vanadium/config/SubresourceFilterComponentUtils.java
+@@ -0,0 +1,70 @@
++package app.vanadium.config;
++
++import android.content.Context;
++import android.system.ErrnoException;
++import android.util.Log;
++
++import java.io.InterruptedIOException;
++import java.util.Objects;
++
++import app.vanadium.ext.utils.AtomicFile2;
++
++public final class SubresourceFilterComponentUtils {
++
++    private static final String UNINDEXED_RULESET_FILE_NAME = "unindexed_subresource_filter";
++    private static final String TAG = "cr_SubresourceFilterComponentUtils";
++
++    private static SubresourceFilterComponentUtils instance;
++    private static volatile boolean initialized = false;
++
++    private final AtomicFile2 atomicFileForParsing;
++
++    SubresourceFilterComponentUtils(Context appCtx) {
++        this.atomicFileForParsing = new AtomicFile2(appCtx, UNINDEXED_RULESET_FILE_NAME);
++    }
++
++    static SubresourceFilterComponentUtils initialize(Context appCtx) {
++        if (initialized) {
++            return instance;
++        }
++
++        instance = new SubresourceFilterComponentUtils(appCtx);
++        initialized = true;
++        return instance;
++    }
++
++    private static SubresourceFilterComponentUtils getInstance() {
++        if (!initialized || instance == null) {
++            Log.w(TAG, "not yet initialized", new Throwable());
++            return null;
++        }
++
++        return instance;
++    }
++
++    public static void writeCurrentContents() {
++        SubresourceFilterComponentUtils instance = getInstance();
++        if (instance == null) {
++            return;
++        }
++
++    }
++
++    public static boolean deleteComponentFileForParsing() {
++        SubresourceFilterComponentUtils instance = getInstance();
++        if (instance == null) {
++            return false;
++        }
++
++        return instance.atomicFileForParsing.delete();
++    }
++
++    public static String getFilePathForParsing() {
++        SubresourceFilterComponentUtils instance = getInstance();
++        if (instance == null) {
++            return null;
++        }
++
++        return instance.atomicFileForParsing.filePath;
++    }
++}

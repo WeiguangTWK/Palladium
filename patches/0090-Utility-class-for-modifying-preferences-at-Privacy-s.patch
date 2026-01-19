@@ -52,24 +52,24 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/privacy/setting
 index 71dc055818496..2b5566800fb6b 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/privacy/settings/PrivacySettings.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/privacy/settings/PrivacySettings.java
-@@ -132,6 +132,8 @@ public class PrivacySettings extends ChromeBaseSettingsFragment
- 
+@@ -134,6 +134,8 @@ public class PrivacySettings extends ChromeBaseSettingsFragment
+
          SettingsUtils.addPreferencesFromResource(this, R.xml.privacy_preferences);
- 
+
 +        PrivacySettingsExt.initializePreferences(this, getProfile());
 +
          Preference sandboxPreference = findPreference(PREF_PRIVACY_SANDBOX);
          // Overwrite the click listener to pass a correct referrer to the fragment.
          sandboxPreference.setOnPreferenceClickListener(
-@@ -300,6 +302,8 @@ public class PrivacySettings extends ChromeBaseSettingsFragment
+@@ -283,6 +285,8 @@ public class PrivacySettings extends ChromeBaseSettingsFragment
              scrollToPreference(PREF_ADVANCED_PROTECTION_INFO);
          }
- 
+
 +        PrivacySettingsExt.removeUnwantedPreferences(this);
 +
          updatePreferences();
      }
- 
+
 @@ -466,6 +470,8 @@ public class PrivacySettings extends ChromeBaseSettingsFragment
                              ? R.string.website_settings_category_javascript_optimizer_allowed_list
                             : R.string.website_settings_category_javascript_optimizer_blocked_list);

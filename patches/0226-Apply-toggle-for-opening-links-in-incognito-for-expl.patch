@@ -11,27 +11,29 @@ Subject: [PATCH] Apply toggle for opening links in incognito for explicit
  3 files changed, 38 insertions(+)
 
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
-index c6a4126aa66fe..28a491c7cadff 100644
+index 4a04ec3c73..78dd2eb171 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
-@@ -1662,6 +1662,8 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+@@ -1663,6 +1663,8 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
                  return;
              }
- 
+
 +            intent = LaunchIntentDispatcherHooks.maybeModifyMainOrExplicitIntents(this, intent);
 +
              // The intent to use in maybeDispatchExplicitMainViewIntent(). We're explicitly
              // adding NEW_TASK flag to make sure backing from CCT brings up the caller activity,
              // and not Chrome
-@@ -2161,6 +2163,8 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
-             Log.i(TAG, "#initializeState");
-             Intent intent = getIntent();
- 
+@@ -2185,6 +2187,9 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+                     persistentState.remove(IS_INCOGNITO_SELECTED);
+                 }
+             }
++
 +            intent = LaunchIntentDispatcherHooks.maybeModifyMainOrExplicitIntents(this, intent);
 +
-             boolean hadCipherData =
-                     CipherLazyHolder.sCipherInstance.restoreFromBundle(getSavedInstanceState());
- 
+             if (!hadCipherData) {
+                 hadCipherData =
+                         CipherLazyHolder.sCipherInstance.restoreFromBundle(getSavedInstanceState());
+
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/LaunchIntentDispatcher.java b/chrome/android/java/src/org/chromium/chrome/browser/LaunchIntentDispatcher.java
 index 1148a915f5e10..33461a5abcb13 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/LaunchIntentDispatcher.java

@@ -14,68 +14,121 @@ settings.
  2 files changed, 12 insertions(+)
 
 diff --git a/components/content_settings/core/browser/content_settings_default_provider.cc b/components/content_settings/core/browser/content_settings_default_provider.cc
-index b4ff0f8db3a59..9cb0c734eb09c 100644
+index eb69bd3c49..69de4c49c6 100644
 --- a/components/content_settings/core/browser/content_settings_default_provider.cc
 +++ b/components/content_settings/core/browser/content_settings_default_provider.cc
-@@ -86,8 +86,10 @@ constexpr char kObsoleteTopLevelTpcdOriginTrialDefaultPref[] =
+@@ -87,10 +87,12 @@ constexpr char kObsoleteTopLevelTpcdOriginTrialDefaultPref[] =
  // except via enterprise policy, so it is temporarily cleaned up here to revert
  // it to its default value.
  // TODO(https://crbug.com/367181093): clean this up.
 +#if !BUILDFLAG(IS_ANDROID)
  constexpr char kBug364820109AlreadyWorkedAroundPref[] =
      "profile.did_work_around_bug_364820109_default";
+ constexpr char kLocalNetworkAccessMigrateDefaultValuePref[] =
+     "profile.default_content_setting_values.has_migrated_local_network_access";
 +#endif  // !BUILDFLAG(IS_ANDROID)
  #endif  // !BUILDFLAG(IS_IOS)
- 
+
  base::Value GetDefaultValue(const WebsiteSettingsInfo* info) {
-@@ -155,8 +157,10 @@ void DefaultProvider::RegisterProfilePrefs(
-   registry->RegisterIntegerPref(kObsoletePrivateNetworkGuardDefaultPref, 0);
- 
+@@ -149,8 +149,10 @@ void DefaultProvider::RegisterProfilePrefs(
+
+   registry->RegisterBooleanPref(kGeolocationMigrateDefaultValue, false);
  #if !BUILDFLAG(IS_IOS)
 +#if !BUILDFLAG(IS_ANDROID)
+   registry->RegisterBooleanPref(kLocalNetworkAccessMigrateDefaultValuePref,
+                                 false);
++#endif  // !BUILDFLAG(IS_ANDROID)
+ #endif  // !BUILDFLAG(IS_IOS)
+
+   // Obsolete prefs -------------------------------------------------------
+@@ -163,7 +165,9 @@ void DefaultProvider::RegisterProfilePrefs(
+
+ #if !BUILDFLAG(IS_IOS)
    // TODO(https://crbug.com/367181093): clean this up.
++#if !BUILDFLAG(IS_ANDROID)
    registry->RegisterBooleanPref(kBug364820109AlreadyWorkedAroundPref, false);
 +#endif  // !BUILDFLAG(IS_ANDROID)
  #endif  // !BUILDFLAG(IS_IOS)
  }
- 
-@@ -410,8 +414,10 @@ void DefaultProvider::DiscardOrMigrateObsoletePreferences() {
-   prefs_->ClearPref(kObsoletePrivateNetworkGuardDefaultPref);
- 
+
+@@ -421,7 +425,9 @@ void DefaultProvider::DiscardOrMigrateObsoletePreferences() {
+
  #if !BUILDFLAG(IS_IOS)
-+#if !BUILDFLAG(IS_ANDROID)
    // TODO(https://crbug.com/367181093): clean this up.
++#if !BUILDFLAG(IS_ANDROID)
    prefs_->ClearPref(kBug364820109AlreadyWorkedAroundPref);
 +#endif  // !BUILDFLAG(IS_ANDROID)
  #endif  // !BUILDFLAG(IS_IOS)
  }
- 
+
+@@ -507,8 +509,12 @@ void DefaultProvider::MigrateLocalNetworkAccessDefaultValue() {
+   // Only the default for LOCAL_NETWORK is changed, as the old prompt language
+   // was biased towards that.
+   if (base::FeatureList::IsEnabled(
+-          network::features::kLocalNetworkAccessChecksSplitPermissions) &&
+-      !prefs_->GetBoolean(kLocalNetworkAccessMigrateDefaultValuePref)) {
++          network::features::kLocalNetworkAccessChecksSplitPermissions)
++#if !BUILDFLAG(IS_ANDROID)
++          &&
++      !prefs_->GetBoolean(kLocalNetworkAccessMigrateDefaultValuePref)
++#endif  // !BUILDFLAG(IS_ANDROID)
++    ) {
+     ChangeSetting(ContentSettingsType::LOCAL_NETWORK,
+                   std::move(default_settings_.at(
+                       ContentSettingsType::LOCAL_NETWORK_ACCESS)));
+@@ -516,18 +522,22 @@ void DefaultProvider::MigrateLocalNetworkAccessDefaultValue() {
+     ChangeSetting(
+         ContentSettingsType::LOCAL_NETWORK_ACCESS,
+         ContentSettingToValue(ContentSetting::CONTENT_SETTING_DEFAULT));
++  #if !BUILDFLAG(IS_ANDROID)
+     prefs_->SetBoolean(kLocalNetworkAccessMigrateDefaultValuePref, true);
++  #endif  // !BUILDFLAG(IS_ANDROID)
+   }
+
+   // If the feature is turned off, then don't attempt to migrate back, as we'd
+   // be unsure of how to reconcile the differences. But make sure to unset the
+   // migration pref so that when the feature gets turned back on we'll migrate
+   // again.
++#if !BUILDFLAG(IS_ANDROID)
+   if (!base::FeatureList::IsEnabled(
+           network::features::kLocalNetworkAccessChecksSplitPermissions) &&
+       prefs_->GetBoolean(kLocalNetworkAccessMigrateDefaultValuePref)) {
+     prefs_->SetBoolean(kLocalNetworkAccessMigrateDefaultValuePref, false);
+   }
++#endif  // !BUILDFLAG(IS_ANDROID)
+ }
+ #endif  // !BUILDFLAG(IS_IOS)
+
 diff --git a/components/content_settings/core/browser/content_settings_pref_provider.cc b/components/content_settings/core/browser/content_settings_pref_provider.cc
-index c71bd5a1e04f7..0a353950d3aa4 100644
+index 35ba835012..d4b63a8db2 100644
 --- a/components/content_settings/core/browser/content_settings_pref_provider.cc
 +++ b/components/content_settings/core/browser/content_settings_pref_provider.cc
-@@ -75,8 +75,10 @@ constexpr char kObsoleteTopLevelTpcdOriginTrialExceptionsPref[] =
+@@ -76,10 +76,12 @@ constexpr char kObsoleteTopLevelTpcdOriginTrialExceptionsPref[] =
  // except via enterprise policy, so it is temporarily cleaned up here to revert
  // it to its default value.
  // TODO(https://crbug.com/367181093): clean this up.
 +#if !BUILDFLAG(IS_ANDROID)
  constexpr char kBug364820109AlreadyWorkedAroundPref[] =
      "profile.did_work_around_bug_364820109_exceptions";
+ constexpr char kLocalNetworkAccessMigrateExceptionsPref[] =
+     "profile.content_settings.exceptions.has_migrated_local_network_access";
 +#endif  // !BUILDFLAG(IS_ANDROID)
  #endif  // !BUILDFLAG(IS_IOS)
- 
+
  }  // namespace
-@@ -123,7 +125,9 @@ void PrefProvider::RegisterProfilePrefs(
+@@ -126,9 +128,11 @@ void PrefProvider::RegisterProfilePrefs(
    registry->RegisterDictionaryPref(
        kObsoleteTopLevelTpcdOriginTrialExceptionsPref);
    // TODO(https://crbug.com/367181093): clean this up.
 +#if !BUILDFLAG(IS_ANDROID)
    registry->RegisterBooleanPref(kBug364820109AlreadyWorkedAroundPref, false);
+   registry->RegisterBooleanPref(kLocalNetworkAccessMigrateExceptionsPref,
+                                 false);
 +#endif  // !BUILDFLAG(IS_ANDROID)
  #endif  // !BUILDFLAG(IS_IOS)
  }
- 
-@@ -450,7 +454,9 @@ void PrefProvider::DiscardOrMigrateObsoletePreferences() {
+
+@@ -459,7 +463,9 @@ void PrefProvider::DiscardOrMigrateObsoletePreferences() {
    prefs_->ClearPref(kObsoleteTopLevelTpcdTrialExceptionsPref);
    prefs_->ClearPref(kObsoleteTopLevelTpcdOriginTrialExceptionsPref);
    // TODO(https://crbug.com/367181093): clean this up.
@@ -85,3 +138,50 @@ index c71bd5a1e04f7..0a353950d3aa4 100644
  #endif  // !BUILDFLAG(IS_IOS)
  }
  
+@@ -562,8 +562,12 @@ void PrefProvider::MigrateLocalNetworkAccessExceptions() {
+   // migrated to LOOPBACK_NETWORK, as the old prompt language was biased towards
+   // LOCAL_NETWORK.
+   if (base::FeatureList::IsEnabled(
+-          network::features::kLocalNetworkAccessChecksSplitPermissions) &&
+-      !prefs_->GetBoolean(kLocalNetworkAccessMigrateExceptionsPref)) {
++          network::features::kLocalNetworkAccessChecksSplitPermissions)
++#if !BUILDFLAG(IS_ANDROID)
++          &&
++      !prefs_->GetBoolean(kLocalNetworkAccessMigrateExceptionsPref)
++#endif  // !BUILDFLAG(IS_ANDROID)
++    ) {
+     auto* old_pref = GetPref(ContentSettingsType::LOCAL_NETWORK_ACCESS);
+     auto* local_pref = GetPref(ContentSettingsType::LOCAL_NETWORK);
+     auto* loopback_pref = GetPref(ContentSettingsType::LOOPBACK_NETWORK);
+@@ -583,7 +587,9 @@ void PrefProvider::MigrateLocalNetworkAccessExceptions() {
+     }
+     it.reset();
+     old_pref->ClearAllContentSettingsRules();
++#if !BUILDFLAG(IS_ANDROID)
+     prefs_->SetBoolean(kLocalNetworkAccessMigrateExceptionsPref, true);
++#endif  // !BUILDFLAG(IS_ANDROID)
+   }
+
+   // If the feature is turned off, then don't attempt to migrate back, as it is
+@@ -593,13 +599,19 @@ void PrefProvider::MigrateLocalNetworkAccessExceptions() {
+   if (base::FeatureList::IsEnabled(
+           network::features::kLocalNetworkAccessChecks) &&
+       !base::FeatureList::IsEnabled(
+-          network::features::kLocalNetworkAccessChecksSplitPermissions) &&
+-      prefs_->GetBoolean(kLocalNetworkAccessMigrateExceptionsPref)) {
++          network::features::kLocalNetworkAccessChecksSplitPermissions)
++#if !BUILDFLAG(IS_ANDROID)
++          &&
++      prefs_->GetBoolean(kLocalNetworkAccessMigrateExceptionsPref)
++#endif  // !BUILDFLAG(IS_ANDROID)
++    ) {
+     auto* local_pref = GetPref(ContentSettingsType::LOCAL_NETWORK);
+     local_pref->ClearAllContentSettingsRules();
+     auto* loopback_pref = GetPref(ContentSettingsType::LOOPBACK_NETWORK);
+     loopback_pref->ClearAllContentSettingsRules();
++#if !BUILDFLAG(IS_ANDROID)
+     prefs_->SetBoolean(kLocalNetworkAccessMigrateExceptionsPref, false);
++#endif  // !BUILDFLAG(IS_ANDROID)
+   }
+ }
+ #endif  // !BUILDFLAG(IS_IOS)

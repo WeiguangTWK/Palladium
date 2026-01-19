@@ -12,28 +12,27 @@ Subject: [PATCH] Disable tab group sync settings UI by default
  5 files changed, 16 insertions(+), 1 deletion(-)
 
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabsSettings.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabsSettings.java
-index 02fb7fd68e8d8..33ea80e165234 100644
+index 38a9704cfc..7a53e6d1e7 100644
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabsSettings.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabsSettings.java
-@@ -19,6 +19,7 @@ import org.chromium.chrome.R;
+@@ -22,6 +22,7 @@ import org.chromium.chrome.R;
  import org.chromium.chrome.browser.auxiliary_search.AuxiliarySearchConfigManager;
  import org.chromium.chrome.browser.auxiliary_search.AuxiliarySearchControllerFactory;
  import org.chromium.chrome.browser.auxiliary_search.AuxiliarySearchUtils;
 +import org.chromium.chrome.browser.flags.ChromeFeatureList;
  import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
  import org.chromium.chrome.browser.preferences.Pref;
- import org.chromium.chrome.browser.settings.ChromeBaseSettingsFragment;
-@@ -80,7 +81,9 @@ public class TabsSettings extends ChromeBaseSettingsFragment {
-         ChromeSwitchPreference autoOpenSyncedTabGroupsSwitch =
-                 (ChromeSwitchPreference) findPreference(PREF_AUTO_OPEN_SYNCED_TAB_GROUPS_SWITCH);
-         boolean isTabGroupSyncAutoOpenConfigurable =
--                TabGroupSyncFeatures.isTabGroupSyncEnabled(getProfile());
-+                TabGroupSyncFeatures.isTabGroupSyncEnabled(getProfile())
-+                        && ChromeFeatureList.isEnabled(
-+                                ChromeFeatureList.TAB_GROUP_SYNC_AUTO_OPEN_KILL_SWITCH);
-         if (!isTabGroupSyncAutoOpenConfigurable) {
-             autoOpenSyncedTabGroupsSwitch.setVisible(false);
-             return;
+ import org.chromium.chrome.browser.profiles.Profile;
+@@ -178,7 +178,7 @@ public class TabsSettings extends ChromeBaseSettingsFragment {
+     }
+
+     private static boolean isTabGroupSyncAutoOpenConfigurable(Profile profile) {
+-        return TabGroupSyncFeatures.isTabGroupSyncEnabled(getProfile())
++        return TabGroupSyncFeatures.isTabGroupSyncEnabled(profile)
+                         && ChromeFeatureList.isEnabled(
+                                 ChromeFeatureList.TAB_GROUP_SYNC_AUTO_OPEN_KILL_SWITCH);
+     }
+
 diff --git a/chrome/browser/flags/android/chrome_feature_list.cc b/chrome/browser/flags/android/chrome_feature_list.cc
 index 656977fe99c38..beb48073f7e3a 100644
 --- a/chrome/browser/flags/android/chrome_feature_list.cc
@@ -47,18 +46,18 @@ index 656977fe99c38..beb48073f7e3a 100644
      &variations::kOmniboxAutofocusOnIncognitoNtp,
      &visited_url_ranking::features::kGroupSuggestionService,
 diff --git a/chrome/browser/flags/android/java/src/org/chromium/chrome/browser/flags/ChromeFeatureList.java b/chrome/browser/flags/android/java/src/org/chromium/chrome/browser/flags/ChromeFeatureList.java
-index e1f5080d0209f..918d8c31113dc 100644
+index 1372de8877..ef13d68566 100644
 --- a/chrome/browser/flags/android/java/src/org/chromium/chrome/browser/flags/ChromeFeatureList.java
 +++ b/chrome/browser/flags/android/java/src/org/chromium/chrome/browser/flags/ChromeFeatureList.java
-@@ -660,6 +660,8 @@ public abstract class ChromeFeatureList {
-     public static final String TAB_GROUP_ENTRY_POINTS_ANDROID = "TabGroupEntryPointsAndroid";
-     public static final String TAB_GROUP_PARITY_BOTTOM_SHEET_ANDROID =
-             "TabGroupParityBottomSheetAndroid";
-+    public static final String TAB_GROUP_SYNC_AUTO_OPEN_KILL_SWITCH =
-+            "TabGroupSyncAutoOpenKillSwitch";
+@@ -639,6 +639,7 @@ public abstract class ChromeFeatureList {
+     public static final String TAB_BOTTOM_SHEET = "TabBottomSheet";
+     public static final String TAB_CLOSURE_METHOD_REFACTOR = "TabClosureMethodRefactor";
+     public static final String TAB_FREEZING_USES_DISCARD = "TabFreezingUsesDiscard";
++    public static final String TAB_GROUP_SYNC_AUTO_OPEN_KILL_SWITCH = "TabGroupSyncAutoOpenKillSwitch";
      public static final String TAB_MODEL_INIT_FIXES = "TabModelInitFixes";
      public static final String TAB_STORAGE_SQLITE_PROTOTYPE = "TabStorageSqlitePrototype";
      public static final String TAB_STRIP_AUTO_SELECT_ON_CLOSE_CHANGE =
+
 diff --git a/components/saved_tab_groups/public/features.cc b/components/saved_tab_groups/public/features.cc
 index 58df956d77020..b9cc7a3c28ff0 100644
 --- a/components/saved_tab_groups/public/features.cc

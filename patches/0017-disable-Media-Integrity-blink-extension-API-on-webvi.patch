@@ -52,23 +52,23 @@ index eaf32e97d9204..405cd765f0413 100644
      &features::kWebViewMoveWorkToProviderInit,
      &features::kWebViewOptInToGmsBindServiceOptimization,
 diff --git a/android_webview/common/aw_features.cc b/android_webview/common/aw_features.cc
-index 046804a879862..f68dde5a76179 100644
+index 4487286105..706ba9f75b 100644
 --- a/android_webview/common/aw_features.cc
 +++ b/android_webview/common/aw_features.cc
 @@ -47,6 +47,11 @@ BASE_FEATURE(kWebViewIgnoreDuplicateNavs, base::FEATURE_DISABLED_BY_DEFAULT);
  BASE_FEATURE(kWebViewLazyFetchHandWritingIcon,
               base::FEATURE_ENABLED_BY_DEFAULT);
- 
+
 +// Enable the WebView Media Integrity API as a Blink extension.
 +// This feature requires `kWebViewMediaIntegrityApi` to be disabled.
 +BASE_FEATURE(kWebViewMediaIntegrityApiBlinkExtension,
 +             base::FEATURE_DISABLED_BY_DEFAULT);
 +
- // When enabled, passive mixed content (Audio/Video/Image subresources loaded
- // over HTTP on HTTPS sites) will be autoupgraded to HTTPS, and the load will be
- // blocked if the resource fails to load over HTTPS. This only affects apps that
+ // When enabled, cookie policy settings are captured at RestrictedCookieManager
+ // creation time and used throughout its lifetime. This enables shared memory
+ // cookie versioning to reduce IPC overhead.
 diff --git a/android_webview/common/aw_features.h b/android_webview/common/aw_features.h
-index 9e34164142791..b225b6a3b2fc7 100644
+index 7d777c02be..f61a792439 100644
 --- a/android_webview/common/aw_features.h
 +++ b/android_webview/common/aw_features.h
 @@ -24,6 +24,7 @@ BASE_DECLARE_FEATURE(kWebViewFileSystemAccess);
@@ -76,9 +76,9 @@ index 9e34164142791..b225b6a3b2fc7 100644
  BASE_DECLARE_FEATURE(kWebViewInvokeZoomPickerOnGSU);
  BASE_DECLARE_FEATURE(kWebViewLazyFetchHandWritingIcon);
 +BASE_DECLARE_FEATURE(kWebViewMediaIntegrityApiBlinkExtension);
+ BASE_DECLARE_FEATURE(kWebViewLatchedCookiePolicy);
  BASE_DECLARE_FEATURE(kWebViewMixedContentAutoupgrades);
  BASE_DECLARE_FEATURE(kWebViewRenderDocument);
- BASE_DECLARE_FEATURE(kWebViewTestFeature);
 diff --git a/android_webview/java/src/org/chromium/android_webview/common/ProductionSupportedFlagList.java b/android_webview/java/src/org/chromium/android_webview/common/ProductionSupportedFlagList.java
 index 986ef05e2a753..db3aa564d419f 100644
 --- a/android_webview/java/src/org/chromium/android_webview/common/ProductionSupportedFlagList.java

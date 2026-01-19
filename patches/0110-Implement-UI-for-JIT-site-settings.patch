@@ -132,30 +132,30 @@ index ab4b83ca76ff8..8f388d40fd425 100644
       * Updates the ads list preference based on whether the site is a candidate for blocking. This
       * has some custom behavior. 1. If the site is a candidate and has activation, the permission
 diff --git a/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/SiteSettingsCategory.java b/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/SiteSettingsCategory.java
-index ae0964539b368..2d99ba174de2b 100644
+index d335c6e2ea..560454be6c 100644
 --- a/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/SiteSettingsCategory.java
 +++ b/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/SiteSettingsCategory.java
-@@ -82,6 +82,7 @@ public class SiteSettingsCategory {
+@@ -81,6 +81,7 @@ public class SiteSettingsCategory {
          Type.LOCAL_NETWORK_ACCESS,
          Type.WINDOW_MANAGEMENT,
          Type.AUTO_PICTURE_IN_PICTURE,
 +        Type.JAVASCRIPT_JIT,
+         Type.LOCAL_NETWORK,
+         Type.LOOPBACK_NETWORK,
          Type.NUM_ENTRIES
-     })
-     @Retention(RetentionPolicy.SOURCE)
-@@ -126,9 +127,10 @@ public class SiteSettingsCategory {
-         int LOCAL_NETWORK_ACCESS = 35;
-         int WINDOW_MANAGEMENT = 36;
-         int AUTO_PICTURE_IN_PICTURE = 37;
-+        int JAVASCRIPT_JIT = 38;
- 
+@@ -129,8 +130,10 @@ public class SiteSettingsCategory {
+         int LOCAL_NETWORK = 37;
+         int LOOPBACK_NETWORK = 38;
+
++        int JAVASCRIPT_JIT = 39;
++
          /** Number of handled categories used for calculating array sizes. */
--        int NUM_ENTRIES = 38;
-+        int NUM_ENTRIES = 39;
+-        int NUM_ENTRIES = 39;
++        int NUM_ENTRIES = 40;
      }
- 
+
      private final BrowserContextHandle mBrowserContextHandle;
-@@ -259,6 +261,8 @@ public class SiteSettingsCategory {
+@@ -261,6 +264,8 @@ public class SiteSettingsCategory {
                  return ContentSettingsType.JAVASCRIPT;
              case Type.JAVASCRIPT_OPTIMIZER:
                  return ContentSettingsType.JAVASCRIPT_OPTIMIZER;
@@ -163,8 +163,8 @@ index ae0964539b368..2d99ba174de2b 100644
 +                return ContentSettingsType.JAVASCRIPT_JIT;
              case Type.LOCAL_NETWORK_ACCESS:
                  return ContentSettingsType.LOCAL_NETWORK_ACCESS;
-             case Type.MICROPHONE:
-@@ -356,6 +360,8 @@ public class SiteSettingsCategory {
+             case Type.LOCAL_NETWORK:
+@@ -361,6 +366,8 @@ public class SiteSettingsCategory {
                  return "javascript";
              case Type.JAVASCRIPT_OPTIMIZER:
                  return "javascript_optimizer";
@@ -172,7 +172,7 @@ index ae0964539b368..2d99ba174de2b 100644
 +                return "javascript_jit";
              case Type.LOCAL_NETWORK_ACCESS:
                  return "local_network_access";
-             case Type.MICROPHONE:
+             case Type.LOCAL_NETWORK:
 diff --git a/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/SiteSettingsUtil.java b/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/SiteSettingsUtil.java
 index 2221371763ce5..892ea158edba3 100644
 --- a/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/SiteSettingsUtil.java
@@ -273,10 +273,10 @@ index 32a7479025a95..4caf01e34a935 100644
             /*valid_settings=*/{CONTENT_SETTING_ALLOW, CONTENT_SETTING_BLOCK},
             WebsiteSettingsInfo::TOP_ORIGIN_ONLY_SCOPE,
 diff --git a/components/page_info/android/page_info_controller_android.cc b/components/page_info/android/page_info_controller_android.cc
-index e27918018f966..3524693d8a99d 100644
+index 8952687857..81c3b732f1 100644
 --- a/components/page_info/android/page_info_controller_android.cc
 +++ b/components/page_info/android/page_info_controller_android.cc
-@@ -170,6 +170,7 @@ void PageInfoControllerAndroid::SetPermissionInfo(
+@@ -171,6 +171,7 @@ void PageInfoControllerAndroid::SetPermissionInfo(
    permissions_to_display.push_back(ContentSettingsType::IDLE_DETECTION);
    permissions_to_display.push_back(ContentSettingsType::IMAGES);
    permissions_to_display.push_back(ContentSettingsType::JAVASCRIPT);
@@ -284,15 +284,16 @@ index e27918018f966..3524693d8a99d 100644
    permissions_to_display.push_back(ContentSettingsType::POPUPS);
    if (base::FeatureList::IsEnabled(
            permissions::features::kAndroidWindowManagementWebApi)) {
-@@ -290,6 +291,8 @@ std::optional<PermissionSetting> PageInfoControllerAndroid::GetSettingToDisplay(
+@@ -298,6 +299,8 @@ std::optional<PermissionSetting> PageInfoControllerAndroid::GetSettingToDisplay(
      // The javascript content setting should show up if it is blocked globally
      // to give users an easy way to create exceptions.
      return permission.default_setting;
 +  } else if (permission.type == ContentSettingsType::JAVASCRIPT_JIT) {
 +    return permission.default_setting;
    } else if (permission.type == ContentSettingsType::NOTIFICATIONS &&
-              base::FeatureList::IsEnabled(
-                  permissions::kPermissionsAndroidClapperLoud)) {
+              (base::FeatureList::IsEnabled(
+                   permissions::kPermissionsAndroidClapperLoud) ||
+
 diff --git a/components/page_info/page_info.cc b/components/page_info/page_info.cc
 index ab3059e214a82..7a8b690a9f1e1 100644
 --- a/components/page_info/page_info.cc

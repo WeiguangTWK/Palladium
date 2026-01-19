@@ -635,19 +635,19 @@ index 48d5d5c0eb741..44f04b5649f27 100644
            std::move(params_->proxy_error_client), this);
    network_delegate_ = network_delegate.get();
 diff --git a/services/network/network_context.h b/services/network/network_context.h
-index 855d72bd52824..ebff7e8f365b1 100644
+index eb631af17f..953fa3af8e 100644
 --- a/services/network/network_context.h
 +++ b/services/network/network_context.h
-@@ -62,6 +62,7 @@
+@@ -61,6 +61,7 @@
  #include "services/network/public/mojom/cookie_manager.mojom-shared.h"
  #include "services/network/public/mojom/host_resolver.mojom.h"
- #include "services/network/public/mojom/network_context.mojom-forward.h"
-+#include "services/network/public/mojom/network_context.mojom-shared.h"
  #include "services/network/public/mojom/network_context.mojom.h"
++#include "services/network/public/mojom/network_context.mojom-shared.h"
  #include "services/network/public/mojom/network_context_client.mojom.h"
  #include "services/network/public/mojom/network_service.mojom-forward.h"
-@@ -326,6 +327,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
-       override;
+ #include "services/network/public/mojom/proxy_lookup_client.mojom.h"
+@@ -320,6 +321,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
+       std::vector<mojom::MatchedNetworkConditionsPtr> conditions) override;
    void SetAcceptLanguage(const std::string& new_accept_language) override;
    void SetEnableReferrers(bool enable_referrers) override;
 +  void SetCrossOriginReferrerPolicy(
@@ -655,6 +655,7 @@ index 855d72bd52824..ebff7e8f365b1 100644
  #if BUILDFLAG(IS_CT_SUPPORTED)
    void SetCTPolicy(mojom::CTPolicyPtr ct_policy) override;
    void MaybeEnqueueSCTReport(
+
 diff --git a/services/network/network_service_network_delegate.cc b/services/network/network_service_network_delegate.cc
 index fc14d500e8add..28e7b08ecc1ba 100644
 --- a/services/network/network_service_network_delegate.cc
