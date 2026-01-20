@@ -1,37 +1,38 @@
+# Build arguments go here.
+# See "gn args <out_dir> --list" for available build arguments.
 target_os = "android"
-# change to x64 for x86_64 targets
-target_cpu = "arm64"
-
-android_channel = "stable"
-android_default_version_name = "144.0.7559.76"
-android_default_version_code = "755907600"
-
-ext_version_enabled = true
-ext_version_increment = "1"
-
-is_component_build = false
+target_cpu = "arm64"  # See "Figuring out target_cpu" below
+use_remoteexec = false  # Enables distributed builds. See "Faster Builds".
+android_static_analysis = "off"  # Does static checks in background. See "Faster Builds".
 is_debug = false
+is_chrome_branded = false
 is_official_build = true
-symbol_level = 1
-disable_fieldtrial_testing_config = true
-
-dfmify_dev_ui = false
-
-# Restore M125 and older behavior of Password Manager settings,
-# which is Play services independent. This feature is planned
-# to be deprecated in 6 months, based on
-# https://chromium-review.googlesource.com/c/chromium/src/+/5493819
-use_login_database_as_backend = true
-
-# enable patented codecs
+enable_discovery = false
+enable_platform_ac3_eac3_audio = true
+enable_platform_hevc = true
+enable_mse_mpeg2ts_stream_parser = true
 ffmpeg_branding = "Chrome"
 proprietary_codecs = true
+rtc_use_h264 = true
+rtc_use_h265=true
+enable_hevc_parser_and_hw_decoder = true
+enable_platform_dolby_vision = true
+enable_platform_encrypted_dolby_vision = true
+enable_platform_iamf_audio = true
+enable_platform_mpeg_h_audio = true
+google_api_key = "no"
+google_default_client_id = "no"
+google_default_client_secret = "no"
+use_official_google_api_keys = false
+enable_resource_allowlist_generation = false
+enable_platform_mpeg_h_audio = true
+rtc_build_examples = false
+cc_wrapper = "sccache"
+angle_use_vulkan_display = true
+use_siso = true
 
-is_cfi = true
-use_cfi_cast = true
-# This feature currently doesn't work with with is_cfi=true,
-# see the now deleted recent patch for M109 when this flag wasn't added.
-use_relative_vtables_abi = false
+# Packagename Branding
+#chrome_public_manifest_package = "org.nekofoss.palladium"
 
 enable_vr = false
 enable_arcore = false
@@ -40,30 +41,6 @@ enable_cardboard = false
 enable_remoting = false
 enable_reporting = false
 
-trichrome_certdigest = "c6adb8b83c6d4c17d292afde56fd488a51d316ff8f2c11c5410223bff8a7dbb3"
-
-chrome_public_manifest_package = "app.vanadium.browser"
-system_webview_package_name = "app.vanadium.webview"
-trichrome_library_package = "app.vanadium.trichromelibrary"
-
-config_apk_package = "app.vanadium.config"
-config_apk_certdigest = "c6adb8b83c6d4c17d292afde56fd488a51d316ff8f2c11c5410223bff8a7dbb3"
-config_apk_version_name = "147"
-config_apk_version_code = "147"
-config_apk_is_debug = false
-
-# Only enable secondary arch support for arm64, reducing build time and apk size elsewhere
-enable_android_secondary_abi = target_cpu == "arm64"
-
-# Explicitly disable static analysis as intended for official builds.
-# See //build/config/android/config.gni line 90-92 as of M136
-# Without this, autoninja unnecessarily prints warnings on some build environment.
-android_static_analysis = "off"
-
-# Siso aims be a drop-in replacement for Ninja, and to speed up Chromium builds.
-# See https://chromium.googlesource.com/infra/infra/+/refs/heads/main/go/src/infra/build/siso/README.md for more details.
-use_siso = true
-
-# Enables usage of wasm in jitless mode or interpreter mode via DrumBrake.
 v8_enable_drumbrake = true
 v8_drumbrake_bounds_checks = true
+
