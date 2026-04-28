@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Wed, 27 Apr 2026 00:00:00 +0000
+Subject: [PATCH] localize added zh-CN strings
+
+Add zh-CN translations for downstream Android settings strings and
+adjust the bookmarks HTML import label to match the Android import flow.
+---
+diff --git a/chrome/app/resources/generated_resources_zh-CN.xtb b/chrome/app/resources/generated_resources_zh-CN.xtb
+index 1ab29178fca3..a71493bb53cd 100644
+--- a/chrome/app/resources/generated_resources_zh-CN.xtb
++++ b/chrome/app/resources/generated_resources_zh-CN.xtb
+@@ -462,7 +462,7 @@
+ <translation id="130097046531636712">开启此设置后，系统会通过限制后台活动和视觉效果（例如流畅滚动）来节省电池电量</translation>
+ <translation id="1301135395320604080"><ph name="ORIGIN" /> 可修改以下文件</translation>
+ <translation id="1302227299132585524">允许 Apple 事件中的 JavaScript</translation>
+-<translation id="1303101771013849280">以前导出的书签（HTML 文件）</translation>
++<translation id="1303101771013849280">书签 HTML 文件</translation>
+ <translation id="1303671224831497365">未找到任何蓝牙设备</translation>
+ <translation id="130491383855577612">已成功替换 Linux 应用和文件</translation>
+ <translation id="1306518237408758433">打开<ph name="BOOKMARK_TITLE" /></translation>
+@@ -11971,4 +11971,4 @@
+ <translation id="998347228911661591">同步标签页分组</translation>
+ <translation id="998747458861718449">检查(&amp;N)</translation>
+ <translation id="998852291477823323">配置的政策不允许执行此操作。</translation>
+-</translationbundle>
+\ No newline at end of file
++</translationbundle>
+diff --git a/chrome/browser/ui/android/strings/translations/android_chrome_strings_zh-CN.xtb b/chrome/browser/ui/android/strings/translations/android_chrome_strings_zh-CN.xtb
+index 81d793e7d564..527aed878f98 100644
+--- a/chrome/browser/ui/android/strings/translations/android_chrome_strings_zh-CN.xtb
++++ b/chrome/browser/ui/android/strings/translations/android_chrome_strings_zh-CN.xtb
+@@ -2008,4 +2008,16 @@
+ <translation id="992745192656291733"><ph name="TAB_COUNT" /> 个标签页</translation>
+ <translation id="996149300115483134">动态卡片上的菜单已关闭</translation>
+ <translation id="99907655649633293"><ph name="TAB_TITLE" />，无痕式标签页</translation>
+-</translationbundle>
+\ No newline at end of file
++<translation id="7459000603787995422">退出时关闭标签页</translation>
++<translation id="1680858055899097121">不在不同浏览会话之间保留标签页</translation>
++<translation id="3961174123108413967">跨源引用来源政策</translation>
++<translation id="8798099450830957504">默认</translation>
++<translation id="978925509676846861">减少跨源引用来源</translation>
++<translation id="2043429678088340203">停用跨源引用来源</translation>
++<translation id="2791404607207277079">在无痕模式中打开外部链接</translation>
++<translation id="4863880122319642164">将在外部应用中触发导航的链接在无痕标签页中打开</translation>
++<translation id="8792121506918889955">WebRTC IP 处理政策</translation>
++<translation id="1822560017823072927">默认公有和私有网络接口</translation>
++<translation id="5825943197137337319">仅默认公有网络接口</translation>
++<translation id="1689062823386843231">停用非代理 UDP</translation>
++</translationbundle>

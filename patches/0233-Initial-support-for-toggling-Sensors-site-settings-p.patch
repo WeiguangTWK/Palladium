@@ -1,0 +1,62 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: quh4gko8 <88831734+quh4gko8@users.noreply.github.com>
+Date: Mon, 19 Jan 2026 14:36:41 +0000
+Subject: [PATCH] Initial support for toggling Sensors site settings per-site
+
+---
+ .../site_settings/SingleWebsiteSettings.java  | 24 ++++++++++++++++++++++++
+ .../browser_ui/site_settings/Website.java     |  1 -
+ 2 files changed, 24 insertions(+), 1 deletion(-)
+
+diff --git a/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/SingleWebsiteSettings.java b/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/SingleWebsiteSettings.java
+index 93ed7e4912414..5c4c866612f7 100644
+--- a/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/SingleWebsiteSettings.java
++++ b/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/SingleWebsiteSettings.java
+@@ -695,6 +695,8 @@ public class SingleWebsiteSettings extends BaseSiteSettingsFragment
+                 // state as ALLOW in regular mode and BLOCK in incognito. This logic should
+                 // be removed when a prompt is implemented for parity with desktop.
+                 setUpAutoPictureInPicturePreference(preference, setting);
++            } else if (type == ContentSettingsType.SENSORS) {
++                setUpSensorsPreference(preference, setting);
+             } else {
+                 setupContentSettingsPreference(preference, setting, mSite.isEmbargoed(type));
+             }
+@@ -1599,6 +1601,22 @@ public class SingleWebsiteSettings extends BaseSiteSettingsFragment
+                 isOneTime(ContentSettingsType.AUTO_PICTURE_IN_PICTURE));
+     }
+ 
++    @RequiresNonNull({"mSite"})
++    private void setUpSensorsPreference(
++            Preference preference, @Nullable PermissionSetting setting) {
++        BrowserContextHandle browserContextHandle = getBrowserContextHandle();
++        if (setting == null) {
++            setting =
++                    new PermissionSetting(
++                            null,
++                            WebsitePreferenceBridge.isCategoryEnabled(
++                                            browserContextHandle, ContentSettingsType.SENSORS)
++                                    ? ContentSetting.ALLOW
++                                    : ContentSetting.BLOCK,
++                            /* isOneTime= */ false);
++        }
++        // Not possible to embargo SENSORS.
++        setupContentSettingsPreference(preference, setting, /* isEmbargoed= */ false);
++    }
++
+     @RequiresNonNull({"mSite"})
+     private void setUpJavascriptPreference(Preference preference) {
+         BrowserContextHandle browserContextHandle = getBrowserContextHandle();
+diff --git a/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/Website.java b/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/Website.java
+index 5ae70b46ce927..879cf1401edd 100644
+--- a/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/Website.java
++++ b/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/Website.java
+@@ -370,7 +370,6 @@ public final class Website implements WebsiteEntry {
+                                 type,
+                                 mOrigin.getOrigin(),
+                                 /* embedder= */ null,
+-                                /* isEmbargoed= */ false,
+-                                SessionModel.DURABLE);
++                                /* isEmbargoed= */ false);
+                 setPermissionInfo(permissionInfo);
+             }
+         }

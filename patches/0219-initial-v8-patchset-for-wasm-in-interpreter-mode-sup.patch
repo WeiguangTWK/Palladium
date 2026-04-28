@@ -1,0 +1,271 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: quh4gko8 <88831734+quh4gko8@users.noreply.github.com>
+Date: Wed, 7 May 2025 16:15:37 +0000
+Subject: [PATCH] initial v8 patchset for wasm in interpreter mode support
+
+Wasm in interpreter mode is implemented via DrumBrake, maintained by the
+Microsoft Edge DrumBrake WebAssembly developer team.
+---
+ ...e-Android-in-supported-platform-for-.patch | 22 +++++++++++++++
+ ...e-support-for-32-bit-binary-compilat.patch | 28 +++++++++++++++++++
+ ...apt-to-current-v8-managed-and-wasm-array.patch | 86 +++++++++++++++++++++++
+ ...-fix-arm64-wrapper-smi-tag-register-width.patch | 22 +++++++++++++++
+ 4 files changed, 158 insertions(+)
+ create mode 100644 vanadium/subprojects_patches/v8/0001-drumbrake-Include-Android-in-supported-platform-for-.patch
+ create mode 100644 vanadium/subprojects_patches/v8/0002-drumbrake-disable-support-for-32-bit-binary-compilat.patch
+ create mode 100644 vanadium/subprojects_patches/v8/0003-drumbrake-adapt-to-current-v8-managed-and-wasm-array.patch
+ create mode 100644 vanadium/subprojects_patches/v8/0004-drumbrake-fix-arm64-wrapper-smi-tag-register-width.patch
+diff --git a/vanadium/subprojects_patches/v8/0001-drumbrake-Include-Android-in-supported-platform-for-.patch b/vanadium/subprojects_patches/v8/0001-drumbrake-Include-Android-in-supported-platform-for-.patch
+new file mode 100644
+index 0000000000000..deadbeefdeadb 100644
+--- /dev/null
++++ b/vanadium/subprojects_patches/v8/0001-drumbrake-Include-Android-in-supported-platform-for-.patch
+@@ -0,0 +1,22 @@
++From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
++From: quh4gko8 <88831734+quh4gko8@users.noreply.github.com>
++Date: Wed, 7 Aug 2024 04:55:08 +0000
++Subject: [PATCH] drumbrake: Include Android in supported platform for wasm
++ interpreter
++
++---
++ gni/v8.gni | 1 +
++ 1 file changed, 1 insertion(+)
++
++diff --git a/gni/v8.gni b/gni/v8.gni
++index e29a7c5de3c..1105cc2c16f 100644
++--- a/gni/v8.gni
+++++ b/gni/v8.gni
++@@ -326,6 +326,7 @@ is_drumbrake_supported =
++     (v8_current_cpu == "x64" || v8_current_cpu == "arm64" ||
++      v8_current_cpu == "riscv64") &&
++     (target_os == "win" || target_os == "linux" || target_os == "mac" ||
+++     target_os == "android" ||
++      target_os == "ios")
++ 
++ # Turbofan is enabled by default, except in lite mode.
+
+diff --git a/vanadium/subprojects_patches/v8/0002-drumbrake-disable-support-for-32-bit-binary-compilat.patch b/vanadium/subprojects_patches/v8/0002-drumbrake-disable-support-for-32-bit-binary-compilat.patch
+new file mode 100644
+index 0000000000000..deadbeefdeadb 100644
+--- /dev/null
++++ b/vanadium/subprojects_patches/v8/0002-drumbrake-disable-support-for-32-bit-binary-compilat.patch
+@@ -0,0 +1,28 @@
++From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
++From: quh4gko8 <88831734+quh4gko8@users.noreply.github.com>
++Date: Wed, 7 Aug 2024 04:53:11 +0000
++Subject: [PATCH] drumbrake: disable support for 32-bit binary compilation
++
++---
++ BUILD.gn | 8 ++++++++
++ 1 file changed, 8 insertions(+)
++
++diff --git a/BUILD.gn b/BUILD.gn
++index 55bacfd1fc7..3a40f81b7cb 100644
++--- a/BUILD.gn
+++++ b/BUILD.gn
++@@ -583,6 +583,14 @@ if (v8_enable_snapshot_native_code_counters == "") {
++   v8_enable_snapshot_native_code_counters = v8_enable_debugging_features
++ }
++ 
+++if (target_os == "android") {
+++  if (v8_current_cpu == "arm" || v8_current_cpu == "x86") {
+++    if (v8_enable_drumbrake) {
+++      v8_enable_drumbrake = false
+++    }
+++  }
+++}
+++
++ if (v8_enable_drumbrake && v8_enable_webassembly) {
++   assert(
++       is_drumbrake_supported,
+
+diff --git a/vanadium/subprojects_patches/v8/0003-drumbrake-adapt-to-current-v8-managed-and-wasm-array.patch b/vanadium/subprojects_patches/v8/0003-drumbrake-adapt-to-current-v8-managed-and-wasm-array.patch
+new file mode 100644
+index 0000000000000..deadbeefdeadb 100644
+--- /dev/null
++++ b/vanadium/subprojects_patches/v8/0003-drumbrake-adapt-to-current-v8-managed-and-wasm-array.patch
+@@ -0,0 +1,153 @@
++From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
++From: OpenAI Codex <codex@openai.com>
++Date: Mon, 27 Apr 2026 21:50:00 +0800
++Subject: [PATCH] drumbrake: adapt to current V8 Managed and WasmArray APIs
++
++---
++ src/wasm/interpreter/wasm-interpreter-objects.cc |  4 ++--
++ src/wasm/interpreter/wasm-interpreter-objects.h  |  5 +++--
++ src/wasm/interpreter/wasm-interpreter-runtime.cc | 23 ++++++++++++-----------
++ 3 files changed, 17 insertions(+), 15 deletions(-)
++
++diff --git a/src/wasm/interpreter/wasm-interpreter-objects.cc b/src/wasm/interpreter/wasm-interpreter-objects.cc
++index 5d8e9b7d49c..430badcddad 100644
++--- a/src/wasm/interpreter/wasm-interpreter-objects.cc
+++++ b/src/wasm/interpreter/wasm-interpreter-objects.cc
++@@ -43,8 +43,7 @@ bool WasmInterpreterObject::RunInterpreter(
++   // Assume an instance can run in only one thread.
++   DirectHandle<Tuple2> interpreter_object =
++       WasmTrustedInstanceData::GetInterpreterObject(instance);
++-  wasm::InterpreterHandle* handle =
++-      wasm::GetOrCreateInterpreterHandle(isolate, interpreter_object);
+++  auto handle = wasm::GetOrCreateInterpreterHandle(isolate, interpreter_object);
++ 
++   return handle->Execute(thread, frame_pointer,
++                          static_cast<uint32_t>(func_index), argument_values,
++@@ -65,8 +64,7 @@ bool WasmInterpreterObject::RunInterpreter(
++   // Assume an instance can run in only one thread.
++   DirectHandle<Tuple2> interpreter_object =
++       WasmTrustedInstanceData::GetInterpreterObject(instance);
++-  wasm::InterpreterHandle* handle =
++-      wasm::GetInterpreterHandle(isolate, interpreter_object);
+++  auto handle = wasm::GetInterpreterHandle(isolate, interpreter_object);
++ 
++   return handle->Execute(thread, frame_pointer,
++                          static_cast<uint32_t>(func_index), interpreter_sp);
++diff --git a/src/wasm/interpreter/wasm-interpreter-objects.h b/src/wasm/interpreter/wasm-interpreter-objects.h
++index a9466280869..2b58e8bb7c4 100644
++--- a/src/wasm/interpreter/wasm-interpreter-objects.h
+++++ b/src/wasm/interpreter/wasm-interpreter-objects.h
++@@ -9,6 +9,7 @@
++ #error This header should only be included if WebAssembly is enabled.
++ #endif  // !V8_ENABLE_WEBASSEMBLY
++ 
+++#include "src/objects/managed.h"
++ #include "src/objects/struct.h"
++ #include "src/wasm/wasm-value.h"
++ 
++@@ -75,9 +76,9 @@ class WasmInterpreterObject {
++ };
++ 
++ namespace wasm {
++-V8_EXPORT_PRIVATE InterpreterHandle* GetInterpreterHandle(
+++V8_EXPORT_PRIVATE Managed<InterpreterHandle>::Ptr GetInterpreterHandle(
++     Isolate* isolate, DirectHandle<Tuple2> interpreter_object);
++-V8_EXPORT_PRIVATE InterpreterHandle* GetOrCreateInterpreterHandle(
+++V8_EXPORT_PRIVATE Managed<InterpreterHandle>::Ptr GetOrCreateInterpreterHandle(
++     Isolate* isolate, DirectHandle<Tuple2> interpreter_object);
++ }  // namespace wasm
++ 
++diff --git a/src/wasm/interpreter/wasm-interpreter-runtime.cc b/src/wasm/interpreter/wasm-interpreter-runtime.cc
++index e6b8243e7b3..2d2fce27955 100644
++--- a/src/wasm/interpreter/wasm-interpreter-runtime.cc
+++++ b/src/wasm/interpreter/wasm-interpreter-runtime.cc
++@@ -105,7 +105,7 @@ RUNTIME_FUNCTION(Runtime_WasmRunInterpreter) {
++   // exist.
++   DirectHandle<Tuple2> interpreter_object =
++       WasmTrustedInstanceData::GetOrCreateInterpreterObject(instance);
++-  wasm::InterpreterHandle* interpreter_handle =
+++  auto interpreter_handle =
++       wasm::GetOrCreateInterpreterHandle(isolate, interpreter_object);
++ 
++   if (wasm::WasmBytecode::ContainsSimd(sig)) {
++@@ -229,16 +229,16 @@ RUNTIME_FUNCTION(Runtime_WasmRunInterpreter) {
++ 
++ namespace wasm {
++ 
++-V8_EXPORT_PRIVATE InterpreterHandle* GetInterpreterHandle(
+++V8_EXPORT_PRIVATE Managed<InterpreterHandle>::Ptr GetInterpreterHandle(
++     Isolate* isolate, DirectHandle<Tuple2> interpreter_object) {
++   DirectHandle<Object> handle(
++       WasmInterpreterObject::get_interpreter_handle(*interpreter_object),
++       isolate);
++   CHECK(!IsUndefined(*handle, isolate));
++-  return TrustedCast<Managed<InterpreterHandle>>(handle)->get().get();
+++  return TrustedCast<Managed<InterpreterHandle>>(handle)->ptr();
++ }
++ 
++-V8_EXPORT_PRIVATE InterpreterHandle* GetOrCreateInterpreterHandle(
+++V8_EXPORT_PRIVATE Managed<InterpreterHandle>::Ptr GetOrCreateInterpreterHandle(
++     Isolate* isolate, DirectHandle<Tuple2> interpreter_object) {
++   DirectHandle<Object> handle(
++       WasmInterpreterObject::get_interpreter_handle(*interpreter_object),
++@@ -256,7 +256,7 @@ V8_EXPORT_PRIVATE InterpreterHandle* GetOrCreateInterpreterHandle(
++     WasmInterpreterObject::set_interpreter_handle(*interpreter_object, *handle);
++   }
++ 
++-  return TrustedCast<Managed<InterpreterHandle>>(handle)->get().get();
+++  return TrustedCast<Managed<InterpreterHandle>>(handle)->ptr();
++ }
++ 
++ // A helper for an entry in an indirect function table (IFT).
++@@ -347,8 +347,7 @@ void WasmInterpreterRuntime::UpdateMemoryAddress(
++   Isolate* isolate = Isolate::Current();
++   DirectHandle<Tuple2> interpreter_object =
++       WasmTrustedInstanceData::GetOrCreateInterpreterObject(instance);
++-  InterpreterHandle* handle =
++-      GetOrCreateInterpreterHandle(isolate, interpreter_object);
+++  auto handle = GetOrCreateInterpreterHandle(isolate, interpreter_object);
++   WasmInterpreterRuntime* wasm_runtime =
++       handle->interpreter()->GetWasmRuntime();
++   DCHECK_LT(memory_index, wasm_runtime->module_->memories.size());
++@@ -1712,8 +1711,7 @@ void WasmInterpreterRuntime::ClearIndirectCallCacheEntry(
++     uint32_t table_index, uint32_t entry_index) {
++   DirectHandle<Tuple2> interpreter_object =
++       WasmTrustedInstanceData::GetOrCreateInterpreterObject(instance);
++-  InterpreterHandle* handle =
++-      GetOrCreateInterpreterHandle(isolate, interpreter_object);
+++  auto handle = GetOrCreateInterpreterHandle(isolate, interpreter_object);
++   WasmInterpreterRuntime* wasm_runtime =
++       handle->interpreter()->GetWasmRuntime();
++   DCHECK_LT(table_index, wasm_runtime->indirect_call_tables_.size());
++@@ -1728,8 +1726,7 @@ void WasmInterpreterRuntime::UpdateIndirectCallTable(
++     uint32_t table_index) {
++   DirectHandle<Tuple2> interpreter_object =
++       WasmTrustedInstanceData::GetOrCreateInterpreterObject(instance);
++-  InterpreterHandle* handle =
++-      GetOrCreateInterpreterHandle(isolate, interpreter_object);
+++  auto handle = GetOrCreateInterpreterHandle(isolate, interpreter_object);
++   WasmInterpreterRuntime* wasm_runtime =
++       handle->interpreter()->GetWasmRuntime();
++   wasm_runtime->PurgeIndirectCallCache(table_index);
++@@ -2436,7 +2433,10 @@ WasmInterpreterRuntime::ArrayNewUninitialized(uint32_t length,
++ 
++   DirectHandle<Map> rtt = RttCanon(array_index);
++   return {
++-      {isolate_->factory()->NewWasmArrayUninitialized(length, rtt), isolate_},
+++      {isolate_->factory()->NewWasmArrayUninitialized(
+++           length, rtt,
+++           is_shared ? AllocationType::kSharedOld : AllocationType::kYoung),
+++       isolate_},
++       array_type,
++       is_shared};
++ }
++@@ -2987,8 +2987,8 @@ DirectHandle<WasmInstanceObject> InterpreterHandle::GetInstanceObject() {
++             TrustedCast<Managed<InterpreterHandle>>(
++                 WasmInterpreterObject::get_interpreter_handle(
++                     instance_obj->trusted_data(isolate_)->interpreter_object()))
++-                ->get()
++-                .get());
+++                ->ptr()
+++                .raw());
++   return instance_obj;
++ }
+
+diff --git a/vanadium/subprojects_patches/v8/0004-drumbrake-fix-arm64-wrapper-smi-tag-register-width.patch b/vanadium/subprojects_patches/v8/0004-drumbrake-fix-arm64-wrapper-smi-tag-register-width.patch
+new file mode 100644
+index 0000000000000..deadbeefdeadb 100644
+--- /dev/null
++++ b/vanadium/subprojects_patches/v8/0004-drumbrake-fix-arm64-wrapper-smi-tag-register-width.patch
+@@ -0,0 +1,24 @@
++From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
++From: OpenAI Codex <codex@openai.com>
++Date: Mon, 27 Apr 2026 21:51:00 +0800
++Subject: [PATCH] drumbrake: fix arm64 wrapper SmiTag register width
++
++---
++ src/wasm/interpreter/arm64/interpreter-builtins-arm64.cc | 4 ++--
++ 1 file changed, 2 insertions(+), 2 deletions(-)
++
++diff --git a/src/wasm/interpreter/arm64/interpreter-builtins-arm64.cc b/src/wasm/interpreter/arm64/interpreter-builtins-arm64.cc
++index 3e763f40de7..2f148dbec15 100644
++--- a/src/wasm/interpreter/arm64/interpreter-builtins-arm64.cc
+++++ b/src/wasm/interpreter/arm64/interpreter-builtins-arm64.cc
++@@ -296,8 +296,8 @@ void Builtins::Generate_JSToWasmInterpreterWrapperAsm(MacroAssembler* masm) {
++          MemOperand(wrapper_buffer,
++                     WasmInterpreterWrapperConstants::kWrapperBufferParamStart));
++ 
++-  DEFINE_PINNED(function_index, w15);
++-  __ Ldr(function_index,
+++  DEFINE_PINNED(function_index, x15);
+++  __ Ldr(function_index.W(),
++          MemOperand(wrapper_buffer,
++                     WasmInterpreterWrapperConstants::kWrapperBufferCallTarget));
++   __ SmiTag(function_index);

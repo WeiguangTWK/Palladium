@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: quh4gko8 <88831734+quh4gko8@users.noreply.github.com>
+Date: Sat, 25 Feb 2023 05:11:12 +0100
+Subject: [PATCH] Use local list of supported languages for Language settings
+
+Disable requests or connections to fetch language list from server
+---
+ components/translate/core/browser/translate_language_list.cc | 31 -------------------------------
+ 1 file changed, 31 deletions(-)
+
+diff --git a/components/translate/core/browser/translate_language_list.cc b/components/translate/core/browser/translate_language_list.cc
+index 5f9427a62c4e..bc4ab572fa5d 100644
+--- a/components/translate/core/browser/translate_language_list.cc
++++ b/components/translate/core/browser/translate_language_list.cc
+@@ -393,37 +393,6 @@ void TranslateLanguageList::RequestLanguageList() {
+   // Palladium uses the built-in supported language list and does not fetch
+   // server-provided updates for language settings.
+   request_pending_ = false;
+-  return;
+-
+-  // If resource requests are not allowed, we'll get a callback when they are.
+-  if (!resource_requests_allowed_) {
+-    request_pending_ = true;
+-    return;
+-  }
+-
+-  request_pending_ = false;
+-
+-  if (language_list_fetcher_.get() &&
+-      (language_list_fetcher_->state() == TranslateUrlFetcher::IDLE ||
+-       language_list_fetcher_->state() == TranslateUrlFetcher::FAILED)) {
+-    GURL url = TranslateLanguageUrl();
+-    url = AddHostLocaleToUrl(url);
+-    url = AddApiKeyToUrl(url);
+-
+-    NotifyEvent(__LINE__,
+-                base::StringPrintf("Language list fetch starts (URL: %s)",
+-                                   url.spec().c_str()));
+-
+-    bool result = language_list_fetcher_->Request(
+-        url,
+-        base::BindOnce(&TranslateLanguageList::OnLanguageListFetchComplete,
+-                       base::Unretained(this)),
+-        // Use the strictest mode for request headers, since incognito state is
+-        // not known.
+-        /*is_incognito=*/true);
+-    if (!result)
+-      NotifyEvent(__LINE__, "Request is omitted due to retry limit");
+-  }
+ }

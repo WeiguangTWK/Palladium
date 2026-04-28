@@ -1,0 +1,73 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: quh4gko8 <88831734+quh4gko8@users.noreply.github.com>
+Date: Wed, 26 Feb 2025 09:46:02 +0000
+Subject: [PATCH] Support configurable crashpad inclusion in chrome targets
+
+---
+ chrome/android/chrome_ext_args.gni        | 6 ++++++
+ chrome/android/chrome_public_apk_tmpl.gni | 3 ++-
+ chrome/android/trichrome.gni              | 4 ++--
+ 3 files changed, 10 insertions(+), 3 deletions(-)
+ create mode 100644 chrome/android/chrome_ext_args.gni
+
+diff --git a/chrome/android/chrome_ext_args.gni b/chrome/android/chrome_ext_args.gni
+new file mode 100644
+index 0000000000000..c6744ae1fba21
+--- /dev/null
++++ b/chrome/android/chrome_ext_args.gni
+@@ -0,0 +1,6 @@
++# Copyright 2026 The Chromium Authors
++# Use of this source code is governed by a BSD-style license that can be
++# found in the LICENSE file.
++
++declare_args() {
++  include_crashpad = true
++}
+diff --git a/chrome/android/chrome_public_apk_tmpl.gni b/chrome/android/chrome_public_apk_tmpl.gni
+index 781675358cce7..1a21f43f3f9bf 100644
+--- a/chrome/android/chrome_public_apk_tmpl.gni
++++ b/chrome/android/chrome_public_apk_tmpl.gni
+@@ -9,6 +9,7 @@ import("//build/config/android/rules.gni")
+ import("//build/config/compiler/compiler.gni")
+ import("//build/config/locales.gni")
+ import("//build/toolchain/gcc_toolchain.gni")
++import("//chrome/android/chrome_ext_args.gni")
+ import("//chrome/android/modules/chrome_bundle_tmpl.gni")
+ import("//chrome/android/modules/chrome_feature_modules.gni")
+ import("//chrome/android/trichrome.gni")
+@@ -598,7 +599,7 @@ template("chrome_common_apk_or_module_tmpl") {
+       library_always_compress = invoker.library_always_compress
+     }
+ 
+-    if (!_is_trichrome) {
++    if (include_crashpad && !_is_trichrome) {
+       # https://chromium.googlesource.com/chromium/src/+/main/docs/android_native_libraries.md#Crashpad-Packaging
+       deps += [
+         "//third_party/crashpad/crashpad/handler:crashpad_handler_trampoline",
+diff --git a/chrome/android/trichrome.gni b/chrome/android/trichrome.gni
+index 0d83c8b94ae7d..bcab7a4be9973 100644
+--- a/chrome/android/trichrome.gni
++++ b/chrome/android/trichrome.gni
+@@ -6,6 +6,7 @@ import("//build/config/android/abi.gni")
+ import("//build/config/android/channel.gni")
+ import("//build/config/android/config.gni")
+ import("//build/config/android/rules.gni")
++import("//chrome/android/chrome_ext_args.gni")
+ import("//chrome/android/modules/buildflags.gni")
+ import("//chrome/version.gni")
+ import("//device/vr/buildflags/buildflags.gni")
+@@ -154,12 +155,12 @@ template("trichrome_library_apk_tmpl") {
+     # https://chromium.googlesource.com/chromium/src/+/main/docs/android_native_libraries.md#Crashpad-Packaging
+     loadable_modules = []
+     secondary_abi_loadable_modules = []
+-    if (_include_primary_abi) {
++    if (include_crashpad && _include_primary_abi) {
+       deps += [
+         "//third_party/crashpad/crashpad/handler:crashpad_handler_trampoline",
+       ]
+       loadable_modules += [ "$root_out_dir/libcrashpad_handler_trampoline.so" ]
+-    } else {
++    } else if (include_crashpad) {
+       deps += [ "//third_party/crashpad/crashpad/handler:crashpad_handler_trampoline($android_secondary_abi_toolchain)" ]
+       secondary_abi_loadable_modules +=
+           [ "$_secondary_out_dir/libcrashpad_handler_trampoline.so" ]
