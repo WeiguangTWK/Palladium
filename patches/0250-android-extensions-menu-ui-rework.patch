@@ -1,0 +1,448 @@
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+index d678c3ef5264..f0e9e80ba1c9 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+@@ -4128,7 +4138,21 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+         } else if (id == R.id.extensions_menu_menu_id) {
+             ExtensionsToolbarCoordinator coordinator =
+                     getToolbarManager().getExtensionsToolbarCoordinator();
+-            coordinator.showExtensionsMenu();
++            if (coordinator != null) {
++                coordinator.showExtensionsMenu();
++            } else {
++                LoadUrlParams params =
++                        new LoadUrlParams(
++                                UrlConstants.CHROME_EXTENSIONS_URL,
++                                PageTransition.AUTO_TOPLEVEL);
++                if (currentTab == null) {
++                    getTabCreator(getCurrentTabModel().isIncognito())
++                            .createNewTab(
++                                    params, TabLaunchType.FROM_CHROME_UI, /* parent= */ null);
++                } else {
++                    currentTab.loadUrl(params);
++                }
++            }
+             RecordUserAction.record("MobileMenuExtensionsMenu");
+         } else if (id == R.id.manage_extensions_menu_id) {
+             LoadUrlParams params =
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java b/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
+index 7300e30ede3e..3e0792701263 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
+@@ -2500,7 +2500,6 @@ public class ToolbarManager
+                 mControlContainer.findViewById(R.id.extensions_toolbar_container_stub);
+         if (extensionsToolbarStub != null) {
+             ChromeAndroidTask task = mChromeAndroidTaskSupplier.get();
+-            // ChromeAndroidTask is available only on Desktop Android.
+             if (task != null) {
+                 mExtensionsToolbarCoordinator =
+                         ExtensionsToolbarCoordinator.maybeCreate(
+@@ -2512,7 +2511,7 @@ public class ToolbarManager
+                                 mActivityTabProvider.asObservable(),
+                                 mTabCreatorManager.getTabCreator(false),
+                                 getBrowsingModeThemeColorProvider(),
+-                                (ToolbarTablet) mToolbarLayout,
++                                mToolbarLayout,
+                                 contextMenuPopulatorFactory,
+                                 selectionDropdownMenuDelegate,
+                                 mTabModelSelector);
+diff --git a/chrome/browser/ui/android/toolbar/java/res/layout/control_container.xml b/chrome/browser/ui/android/toolbar/java/res/layout/control_container.xml
+index 2dd990bc9473..5bfc9b3ba028 100644
+--- a/chrome/browser/ui/android/toolbar/java/res/layout/control_container.xml
++++ b/chrome/browser/ui/android/toolbar/java/res/layout/control_container.xml
+@@ -50,4 +50,12 @@ found in the LICENSE file.
+         android:layout_marginEnd="@dimen/find_in_page_popup_margin_end"
+         android:layout_gravity="end|top"
+         android:layout="@layout/find_toolbar" />
++
++    <ViewStub
++        android:id="@+id/extensions_toolbar_container_stub"
++        android:inflatedId="@+id/extensions_toolbar_container"
++        android:layout_width="wrap_content"
++        android:layout_height="?attr/toolbarButtonHeight"
++        android:layout_marginTop="@dimen/tab_strip_height"
++        android:layout_gravity="end|top" />
+ </org.chromium.chrome.browser.toolbar.top.ToolbarControlContainer>
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuCoordinator.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuCoordinator.java
+index 1d31114b510b..eee33b4a3578 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuCoordinator.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuCoordinator.java
+@@ -68,6 +68,7 @@ public class ExtensionsMenuCoordinator
+     private final Context mContext;
+     private final ListMenu mExtensionsMenu;
+     private final ListMenuButton mExtensionsMenuButton;
++    private final View mPopupAnchorView;
+     private final ThemeColorProvider mThemeColorProvider;
+     private final NullableObservableSupplier<Tab> mCurrentTabSupplier;
+     private final TabCreator mTabCreator;
+@@ -104,6 +105,7 @@ public class ExtensionsMenuCoordinator
+     public ExtensionsMenuCoordinator(
+             Context context,
+             ListMenuButton extensionsMenuButton,
++            View popupAnchorView,
+             ThemeColorProvider themeColorProvider,
+             ChromeAndroidTask task,
+             WindowAndroid windowAndroid,
+@@ -143,6 +145,7 @@ public class ExtensionsMenuCoordinator
+                 };
+ 
+         mExtensionsMenuButton = extensionsMenuButton;
++        mPopupAnchorView = popupAnchorView;
+         mExtensionsMenuButton.setMenuMaxWidth(
+                 context.getResources().getDimensionPixelSize(R.dimen.extension_menu_max_width));
+         mExtensionsMenuButton.setDelegate(
+@@ -154,7 +157,7 @@ public class ExtensionsMenuCoordinator
+ 
+                     @Override
+                     public RectProvider getRectProvider(View listMenuHostingView) {
+-                        return MenuBuilderHelper.getRectProvider(mExtensionsMenuButton);
++                        return MenuBuilderHelper.getRectProvider(mPopupAnchorView);
+                     }
+                 },
+                 /* overrideOnClickListener= */ true);
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuItemProperties.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuItemProperties.java
+index 65ba9b3954a9..24ae67a4aad3 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuItemProperties.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuItemProperties.java
+@@ -29,6 +29,9 @@ public class ExtensionsMenuItemProperties {
+     public static final WritableIntPropertyKey CONTEXT_MENU_BUTTON_ICON =
+             new WritableIntPropertyKey();
+ 
++    public static final WritableBooleanPropertyKey CONTEXT_MENU_BUTTON_VISIBLE =
++            new WritableBooleanPropertyKey();
++
+     public static final WritableObjectPropertyKey<View.OnClickListener>
+             CONTEXT_MENU_BUTTON_ON_CLICK = new WritableObjectPropertyKey<>();
+ 
+@@ -65,6 +68,7 @@ public class ExtensionsMenuItemProperties {
+                 ICON,
+                 TITLE,
+                 CONTEXT_MENU_BUTTON_ICON,
++                CONTEXT_MENU_BUTTON_VISIBLE,
+                 CONTEXT_MENU_BUTTON_ON_CLICK,
+                 PRIMARY_ACTION_ON_CLICK,
+                 SITE_ACCESS_TOGGLE_CHECKED,
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuItemViewBinder.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuItemViewBinder.java
+index 546f5fce84ea..381d075f1deb 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuItemViewBinder.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuItemViewBinder.java
+@@ -35,6 +35,12 @@ public class ExtensionsMenuItemViewBinder {
+             ImageView contextMenuView = view.findViewById(R.id.extensions_menu_item_context_menu);
+             contextMenuView.setImageResource(
+                     model.get(ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_ICON));
++        } else if (key == ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_VISIBLE) {
++            view.findViewById(R.id.extensions_menu_item_context_menu)
++                    .setVisibility(
++                            model.get(ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_VISIBLE)
++                                    ? View.VISIBLE
++                                    : View.GONE);
+         } else if (key == ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_ON_CLICK) {
+             view.findViewById(R.id.extensions_menu_item_context_menu)
+                     .setOnClickListener(
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuMediator.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuMediator.java
+index 1b3f45beb699..585e3010186a 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuMediator.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuMediator.java
+@@ -6,7 +6,6 @@ package org.chromium.chrome.browser.toolbar.extensions;
+ 
+ import android.content.Context;
+ import android.graphics.Bitmap;
+-
+ import androidx.annotation.VisibleForTesting;
+ 
+ import org.chromium.base.lifetime.Destroyable;
+@@ -22,7 +21,6 @@ import org.chromium.chrome.browser.ui.extensions.ExtensionActionContextMenuBridg
+ import org.chromium.chrome.browser.ui.extensions.ExtensionsMenuBridge;
+ import org.chromium.chrome.browser.ui.extensions.ExtensionsMenuTypes;
+ import org.chromium.chrome.browser.ui.extensions.ExtensionsToolbarBridge;
+-import org.chromium.chrome.browser.ui.extensions.R;
+ import org.chromium.components.embedder_support.util.UrlConstants;
+ import org.chromium.content_public.browser.LoadUrlParams;
+ import org.chromium.content_public.browser.WebContents;
+@@ -312,10 +310,6 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
+             return;
+         }
+ 
+-        // Update the site permissions page for the extension.
+-        // TODO(crbug.com/473213114): If the extension no longer has site access, which can happen
+-        // during an update, the site permissions page should no longer be visible and we should
+-        // go back to the main page.
+         updateSitePermissionsPage(entry.id);
+     }
+ 
+@@ -361,19 +355,10 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
+      * @return The created list item.
+      */
+     private ListItem createMenuItem(ExtensionsMenuTypes.MenuEntryState entry) {
+-        boolean isActionPinned = entry.contextMenuButton.isOn;
+-        int contextMenuIcon = isActionPinned ? R.drawable.ic_keep_24dp : R.drawable.ic_more_vert;
+-
+         PropertyModel model =
+                 new PropertyModel.Builder(ExtensionsMenuItemProperties.ALL_KEYS)
+                         .with(ExtensionsMenuItemProperties.EXTENSION_ID, entry.id)
+-                        .with(
+-                                ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_ON_CLICK,
+-                                (view) ->
+-                                        onContextMenuButtonClicked((ListMenuButton) view, entry.id))
+-                        .with(
+-                                ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_ICON,
+-                                contextMenuIcon)
++                        .with(ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_VISIBLE, false)
+                         .with(
+                                 ExtensionsMenuItemProperties.PRIMARY_ACTION_ON_CLICK,
+                                 (view) -> mMenuBridge.executeAction(entry.id))
+@@ -414,7 +399,6 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
+      */
+     private void onSitePermissionsButtonClicked(String extensionId) {
+         mSitePermissionsPageModel.set(SitePermissionsPageProperties.EXTENSION_ID, extensionId);
+-
+         updateSitePermissionsPage(extensionId);
+ 
+         // Set current page to site permissions page.
+@@ -453,24 +437,15 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
+             PropertyModel itemModel, ExtensionsMenuTypes.MenuEntryState itemState) {
+         itemModel.set(ExtensionsMenuItemProperties.TITLE, itemState.actionButton.text);
+         itemModel.set(ExtensionsMenuItemProperties.ICON, itemState.actionButton.icon);
+-        itemModel.set(
+-                ExtensionsMenuItemProperties.SITE_ACCESS_TOGGLE_CHECKED,
+-                itemState.siteAccessToggle.isOn);
+         itemModel.set(
+                 ExtensionsMenuItemProperties.SITE_ACCESS_TOGGLE_STATUS,
+-                itemState.siteAccessToggle.status);
+-        itemModel.set(
+-                ExtensionsMenuItemProperties.SITE_ACCESS_TOGGLE_TOOLTIP,
+-                itemState.siteAccessToggle.tooltipText);
++                ExtensionsMenuTypes.ControlState.Status.HIDDEN);
+         itemModel.set(
+                 ExtensionsMenuItemProperties.SITE_PERMISSIONS_BUTTON_ACCESSIBLE_NAME,
+                 itemState.sitePermissionsButton.accessibleName);
+         itemModel.set(
+                 ExtensionsMenuItemProperties.SITE_PERMISSIONS_BUTTON_STATUS,
+-                itemState.sitePermissionsButton.status);
+-        itemModel.set(
+-                ExtensionsMenuItemProperties.SITE_PERMISSIONS_BUTTON_TEXT,
+-                itemState.sitePermissionsButton.text);
++                ExtensionsMenuTypes.ControlState.Status.HIDDEN);
+     }
+ 
+     /**
+@@ -519,7 +494,6 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
+     private void updateSitePermissionsPage(String extensionId) {
+         ExtensionsMenuTypes.ExtensionSitePermissionsState sitePermissionsState =
+                 mMenuBridge.getExtensionSitePermissionsState(extensionId);
+-
+         mSitePermissionsPageModel.set(
+                 SitePermissionsPageProperties.EXTENSION_NAME, sitePermissionsState.extensionName);
+         mSitePermissionsPageModel.set(
+@@ -535,7 +509,6 @@ class ExtensionsMenuMediator implements Destroyable, ExtensionsMenuBridge.Observ
+         mSitePermissionsPageModel.set(
+                 SitePermissionsPageProperties.ON_SITE_ACCESS_SELECTED_LISTENER,
+                 (siteAccess) -> mMenuBridge.onExtensionSiteAccessSelected(extensionId, siteAccess));
+-
+         mSitePermissionsPageModel.set(
+                 SitePermissionsPageProperties.SHOW_REQUESTS_TOGGLE_CHECKED,
+                 sitePermissionsState.showRequestsToggle.isOn);
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsToolbarCoordinatorImpl.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsToolbarCoordinatorImpl.java
+index ab8569616fbb..b237b0e1aaa3 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsToolbarCoordinatorImpl.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsToolbarCoordinatorImpl.java
+@@ -12,10 +12,13 @@ import android.content.res.Configuration;
+ import android.graphics.Rect;
+ import android.os.Handler;
+ import android.os.Looper;
++import android.view.Gravity;
+ import android.view.KeyEvent;
++import android.view.LayoutInflater;
+ import android.view.View;
+ import android.view.ViewGroup;
+ import android.view.ViewStub;
++import android.widget.FrameLayout;
+ import android.widget.LinearLayout;
+ import android.widget.TextView;
+ 
+@@ -91,6 +94,7 @@ public class ExtensionsToolbarCoordinatorImpl
+     private final MenuButtonPinningDelegate mMenuButtonPinningDelegate =
+             new MenuButtonPinningDelegate();
+     private View.@Nullable OnLayoutChangeListener mLayoutChangeListener;
++    private View mPopupAnchorView;
+     private boolean mWasWindowCompact;
+     private WindowAndroid mWindowAndroid;
+     private Profile mProfile;
+@@ -114,9 +118,35 @@ public class ExtensionsToolbarCoordinatorImpl
+         mBridge = new ExtensionActionsBridge(task, profile);
+         mWindowAndroid = windowAndroid;
+         mProfile = profile;
++        mWasWindowCompact =
++                context.getResources().getConfiguration().screenWidthDp
++                        < COMPACT_WINDOW_THRESHOLD_DP;
++
++        if (mWasWindowCompact) {
++            mContainer =
++                    (LinearLayout)
++                            LayoutInflater.from(context)
++                                    .inflate(
++                                            R.layout.extensions_toolbar_container,
++                                            rootView,
++                                            /* attachToRoot= */ false);
++            FrameLayout.LayoutParams layoutParams =
++                    new FrameLayout.LayoutParams(
++                            1,
++                            1);
++            layoutParams.gravity = Gravity.START | Gravity.TOP;
++            mContainer.setLayoutParams(layoutParams);
++            rootView.addView(mContainer);
++        } else {
++            extensionsToolbarStub.setLayoutResource(R.layout.extensions_toolbar_container);
++            mContainer = (LinearLayout) extensionsToolbarStub.inflate();
++        }
+ 
+-        extensionsToolbarStub.setLayoutResource(R.layout.extensions_toolbar_container);
+-        mContainer = (LinearLayout) extensionsToolbarStub.inflate();
++        View compactAnchorView = rootView.findViewById(R.id.menu_button_wrapper);
++        mPopupAnchorView =
++                mWasWindowCompact && compactAnchorView != null
++                        ? compactAnchorView
++                        : mContainer.findViewById(R.id.extensions_menu_button);
+ 
+         mExtensionsToolbarBridge = new ExtensionsToolbarBridge(task, profile);
+         mExtensionsToolbarBridge.addObserver(mExtensionsToolbarBridgeObserver);
+@@ -147,6 +177,7 @@ public class ExtensionsToolbarCoordinatorImpl
+                 new ExtensionsMenuCoordinator(
+                         context,
+                         mContainer.findViewById(R.id.extensions_menu_button),
++                        mPopupAnchorView,
+                         themeColorProvider,
+                         task,
+                         windowAndroid,
+@@ -170,9 +201,13 @@ public class ExtensionsToolbarCoordinatorImpl
+         mPrefChangeRegistrar.addObserver(
+                 Pref.PIN_EXTENSIONS_MENU_BUTTON, this::updateMenuButtonPinState);
+         context.registerComponentCallbacks(this);
+-        mWasWindowCompact =
+-                context.getResources().getConfiguration().screenWidthDp
+-                        < COMPACT_WINDOW_THRESHOLD_DP;
++        if (mWasWindowCompact) {
++            // On phones this container acts only as a detached invisible anchor for the popup.
++            mContainer.setVisibility(View.INVISIBLE);
++            mContainer.setAlpha(0f);
++            mContainer.setClickable(false);
++            mContainer.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
++        }
+     }
+ 
+     @Override
+@@ -256,7 +291,7 @@ public class ExtensionsToolbarCoordinatorImpl
+         Activity activity = mWindowAndroid.getActivity().get();
+         if (activity == null) return;
+ 
+-        View anchorView = mContainer.findViewById(R.id.extensions_menu_button);
++        View anchorView = mPopupAnchorView;
+         if (anchorView == null) return;
+ 
+         Handler handler = new Handler(Looper.getMainLooper());
+@@ -336,14 +371,23 @@ public class ExtensionsToolbarCoordinatorImpl
+     }
+ 
+     private void updateMenuIconVisibility() {
+-        int visibility = shouldShowMenuIcon() ? View.VISIBLE : View.GONE;
+-        mContainer.findViewById(R.id.extensions_menu_button).setVisibility(visibility);
++        boolean shouldShow = shouldShowMenuIcon();
++        View menuButton = mContainer.findViewById(R.id.extensions_menu_button);
++        if (mWasWindowCompact) {
++            mContainer.setVisibility(View.INVISIBLE);
++            mContainer.setAlpha(0f);
++            mContainer.setClickable(false);
++        }
++        int visibility = shouldShow ? View.VISIBLE : View.GONE;
++        menuButton.setVisibility(visibility);
++        menuButton.setClickable(shouldShow);
++        menuButton.setEnabled(shouldShow);
+     }
+ 
+     private boolean shouldShowMenuIcon() {
+         return mExtensionsMenuCoordinator.isExtensionsMenuOpen()
+                 || mShowExtensionsMenuPending
+-                || (mCanShowMenuIcon && isMenuButtonPinned());
++                || (!mWasWindowCompact && mCanShowMenuIcon && isMenuButtonPinned());
+     }
+ 
+     public class MenuButtonPinningDelegate {
+@@ -356,6 +400,9 @@ public class ExtensionsToolbarCoordinatorImpl
+         }
+ 
+         void requestLayoutWithViewUtils() {
++            if (mWasWindowCompact && !shouldShowMenuIcon()) {
++                updateMenuIconVisibility();
++            }
+             // Trigger layout and wait for the toolbar to provide us with width allocation.
+             ViewUtils.requestLayout(
+                     mContainer, "ExtensionsToolbarCoordinatorImpl.requestLayoutWithViewUtils()");
+@@ -385,11 +432,17 @@ public class ExtensionsToolbarCoordinatorImpl
+     private class PoppedOutActionWidthConsumer implements ToolbarWidthConsumer {
+         @Override
+         public boolean isVisible() {
++            if (mWasWindowCompact) {
++                return false;
++            }
+             return mExtensionActionListCoordinator.hasPoppedOutAction();
+         }
+ 
+         @Override
+         public int updateVisibility(int availableWidth) {
++            if (mWasWindowCompact) {
++                return 0;
++            }
+             // Do not update the UI here just yet. We will leave that to {@link
+             // ActionListWidthConsumer}, which will be called but later because it has lower
+             // priority.
+@@ -406,6 +459,9 @@ public class ExtensionsToolbarCoordinatorImpl
+     private class RequestAccessButtonWidthConsumer implements ToolbarWidthConsumer {
+         @Override
+         public boolean isVisible() {
++            if (mWasWindowCompact) {
++                return false;
++            }
+             return mToolbarModel.get(ExtensionsToolbarProperties.IS_REQUEST_ACCESS_BUTTON_VISIBLE);
+         }
+ 
+@@ -418,6 +474,10 @@ public class ExtensionsToolbarCoordinatorImpl
+ 
+         @Override
+         public int updateVisibility(int availableWidth) {
++            if (mWasWindowCompact) {
++                setHasSpaceToShow(false);
++                return 0;
++            }
+             boolean isWindowCompact =
+                     mContainer.getResources().getConfiguration().screenWidthDp
+                             < COMPACT_WINDOW_THRESHOLD_DP;
+@@ -471,6 +531,10 @@ public class ExtensionsToolbarCoordinatorImpl
+ 
+         @Override
+         public int updateVisibility(int availableWidth) {
++            if (mWasWindowCompact) {
++                updateMenuIconVisibility();
++                return 0;
++            }
+             int puzzleButtonWidth =
+                     mContainer.getResources().getDimensionPixelSize(R.dimen.toolbar_button_width);
+             mCanShowMenuIcon = puzzleButtonWidth <= availableWidth;
+@@ -490,12 +554,18 @@ public class ExtensionsToolbarCoordinatorImpl
+     private class ActionListWidthConsumer implements ToolbarWidthConsumer {
+         @Override
+         public boolean isVisible() {
++            if (mWasWindowCompact) {
++                return false;
++            }
+             return mContainer.findViewById(R.id.extension_action_list).getVisibility()
+                     == View.VISIBLE;
+         }
+ 
+         @Override
+         public int updateVisibility(int availableWidth) {
++            if (mWasWindowCompact) {
++                return 0;
++            }
+             return mExtensionActionListCoordinator.fitActionsWithinWidth(availableWidth);
+         }
+ 

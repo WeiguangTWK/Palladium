@@ -1,0 +1,327 @@
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+@@ -4128,7 +4128,21 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
+         } else if (id == R.id.extensions_menu_menu_id) {
+             ExtensionsToolbarCoordinator coordinator =
+                     getToolbarManager().getExtensionsToolbarCoordinator();
+-            coordinator.showExtensionsMenu();
++            if (coordinator != null) {
++                coordinator.showExtensionsMenu();
++            } else {
++                LoadUrlParams params =
++                        new LoadUrlParams(
++                                UrlConstants.CHROME_EXTENSIONS_URL,
++                                PageTransition.AUTO_TOPLEVEL);
++                if (currentTab == null) {
++                    getTabCreator(getCurrentTabModel().isIncognito())
++                            .createNewTab(
++                                    params, TabLaunchType.FROM_CHROME_UI, /* parent= */ null);
++                } else {
++                    currentTab.loadUrl(params);
++                }
++            }
+             RecordUserAction.record("MobileMenuExtensionsMenu");
+         } else if (id == R.id.manage_extensions_menu_id) {
+             LoadUrlParams params =
+diff --git a/chrome/browser/extensions/chrome_component_extension_resource_manager.cc b/chrome/browser/extensions/chrome_component_extension_resource_manager.cc
+--- a/chrome/browser/extensions/chrome_component_extension_resource_manager.cc
++++ b/chrome/browser/extensions/chrome_component_extension_resource_manager.cc
+@@ -13,6 +13,7 @@
+ #include "base/files/file_path.h"
+ #include "base/path_service.h"
+ #include "base/values.h"
++#include "build/android_buildflags.h"
+ #include "build/build_config.h"
+ #include "build/chromeos_buildflags.h"
+ #include "chrome/common/chrome_features.h"
+@@ -84,23 +85,23 @@ class ChromeComponentExtensionResourceManager::Data {
+ };
+ 
+ ChromeComponentExtensionResourceManager::Data::Data() {
+-  static const webui::ResourcePath kExtraComponentExtensionResources[] = {
+-#if BUILDFLAG(IS_CHROMEOS)
+-    {"web_store/webstore_icon_128.png", IDR_WEBSTORE_APP_ICON_128},
+-    {"web_store/webstore_icon_16.png", IDR_WEBSTORE_APP_ICON_16},
+-#else
+-    {"web_store/webstore_icon_128.png", IDR_WEBSTORE_ICON},
+-    {"web_store/webstore_icon_16.png", IDR_WEBSTORE_ICON_16},
+-#endif
++  AddComponentResourceEntries(kComponentExtensionResources);
+ 
+ #if BUILDFLAG(IS_CHROMEOS)
+-    {"chrome_app/chrome_app_icon_32.png", IDR_CHROME_APP_ICON_32},
+-    {"chrome_app/chrome_app_icon_192.png", IDR_CHROME_APP_ICON_192},
+-#endif  // BUILDFLAG(IS_CHROMEOS)
++  static constexpr webui::ResourcePath kExtraComponentExtensionResources[] = {
++      {"web_store/webstore_icon_128.png", IDR_WEBSTORE_APP_ICON_128},
++      {"web_store/webstore_icon_16.png", IDR_WEBSTORE_APP_ICON_16},
++      {"chrome_app/chrome_app_icon_32.png", IDR_CHROME_APP_ICON_32},
++      {"chrome_app/chrome_app_icon_192.png", IDR_CHROME_APP_ICON_192},
++  };
++  AddComponentResourceEntries(kExtraComponentExtensionResources);
++#elif !BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_DESKTOP_ANDROID)
++  static constexpr webui::ResourcePath kExtraComponentExtensionResources[] = {
++      {"web_store/webstore_icon_128.png", IDR_WEBSTORE_ICON},
++      {"web_store/webstore_icon_16.png", IDR_WEBSTORE_ICON_16},
+   };
+-
+-  AddComponentResourceEntries(kComponentExtensionResources);
+   AddComponentResourceEntries(kExtraComponentExtensionResources);
++#endif
+ 
+ #if !BUILDFLAG(IS_ANDROID)
+   if (base::FeatureList::IsEnabled(features::kIndigo)) {
+diff --git a/chrome/browser/extensions/favicon/favicon_util.cc b/chrome/browser/extensions/favicon/favicon_util.cc
+--- a/chrome/browser/extensions/favicon/favicon_util.cc
++++ b/chrome/browser/extensions/favicon/favicon_util.cc
+@@ -7,6 +7,8 @@
+ #include "base/functional/bind.h"
+ #include "base/functional/callback.h"
+ #include "base/memory/scoped_refptr.h"
++#include "build/android_buildflags.h"
++#include "build/build_config.h"
+ #include "chrome/browser/favicon/favicon_service_factory.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "components/favicon/core/favicon_service.h"
+@@ -36,12 +38,14 @@ int GetResourceID(int size_in_pixels) {
+   const bool is_dark =
+       ui::NativeTheme::GetInstanceForNativeUi()->preferred_color_scheme() ==
+       ui::NativeTheme::PreferredColorScheme::kDark;
++#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_DESKTOP_ANDROID)
+   if (size_in_pixels >= 64) {
+     return is_dark ? IDR_DEFAULT_FAVICON_DARK_64 : IDR_DEFAULT_FAVICON_64;
+   }
+   if (size_in_pixels >= 32) {
+     return is_dark ? IDR_DEFAULT_FAVICON_DARK_32 : IDR_DEFAULT_FAVICON_32;
+   }
++#endif
+   return is_dark ? IDR_DEFAULT_FAVICON_DARK : IDR_DEFAULT_FAVICON;
+ }
+diff --git a/chrome/browser/media/router/discovery/BUILD.gn b/chrome/browser/media/router/discovery/BUILD.gn
+--- a/chrome/browser/media/router/discovery/BUILD.gn
++++ b/chrome/browser/media/router/discovery/BUILD.gn
+@@ -3,8 +3,10 @@
+ # found in the LICENSE file.
+ 
+ import("//build/config/chrome_build.gni")
++import("//extensions/buildflags/buildflags.gni")
+ 
+-assert(!is_android || is_desktop_android, "Not supported on mobile")
++assert(!is_android || is_desktop_android || enable_desktop_android_extensions,
++       "Not supported on mobile")
+ assert(!is_fuchsia, "Fuchsia shouldn't use anything in //chrome")
+ 
+ static_library("discovery") {
+diff --git a/chrome/browser/resources/BUILD.gn b/chrome/browser/resources/BUILD.gn
+--- a/chrome/browser/resources/BUILD.gn
++++ b/chrome/browser/resources/BUILD.gn
+@@ -121,10 +121,12 @@ group("resources") {
+   }
+ 
+   if (is_win || is_mac || is_linux || is_chromeos || is_desktop_android) {
+-    public_deps += [
+-      "discards:resources",
+-      "management:resources",
+-    ]
++    public_deps += [ "discards:resources" ]
++  }
++
++  if (is_win || is_mac || is_linux || is_chromeos || is_desktop_android ||
++      enable_desktop_android_extensions) {
++    public_deps += [ "management:resources" ]
+   }
+ 
+   if (is_win || is_mac || is_linux || is_chromeos) {
+diff --git a/chrome/browser/ui/BUILD.gn b/chrome/browser/ui/BUILD.gn
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -3131,6 +3131,14 @@ static_library("ui") {
+       "webui/discards/graph_dump_impl.h",
+       "webui/discards/site_data_provider_impl.cc",
+       "webui/discards/site_data_provider_impl.h",
++    ]
++
++    deps += [ "//chrome/browser/ui/webui/discards:mojo_bindings" ]
++  }
++
++  if (is_win || is_mac || is_linux || is_chromeos ||
++      is_desktop_android || enable_desktop_android_extensions) {
++    sources += [
+       "webui/management/management_ui.cc",
+       "webui/management/management_ui.h",
+       "webui/management/management_ui_constants.cc",
+diff --git a/chrome/browser/ui/webui/favicon_source.cc b/chrome/browser/ui/webui/favicon_source.cc
+--- a/chrome/browser/ui/webui/favicon_source.cc
++++ b/chrome/browser/ui/webui/favicon_source.cc
+@@ -10,6 +10,7 @@
+ #include "base/functional/callback_helpers.h"
+ #include "base/metrics/histogram_functions.h"
+ #include "base/strings/string_number_conversions.h"
++#include "build/build_config.h"
+ #include "chrome/browser/favicon/favicon_service_factory.h"
+ #include "chrome/browser/favicon/favicon_utils.h"
+ #include "chrome/browser/favicon/history_ui_favicon_request_handler_factory.h"
+@@ -317,6 +318,7 @@ void FaviconSource::SendDefaultResponse(
+ 
+   int resource_id;
+   switch (size_in_dip) {
++#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_DESKTOP_ANDROID)
+     case 64:
+       resource_id =
+           dark_mode ? IDR_DEFAULT_FAVICON_DARK_64 : IDR_DEFAULT_FAVICON_64;
+@@ -325,6 +327,7 @@ void FaviconSource::SendDefaultResponse(
+       resource_id =
+           dark_mode ? IDR_DEFAULT_FAVICON_DARK_32 : IDR_DEFAULT_FAVICON_32;
+       break;
++#endif
+     default:
+       resource_id = dark_mode ? IDR_DEFAULT_FAVICON_DARK : IDR_DEFAULT_FAVICON;
+       break;
+diff --git a/extensions/browser/api/power/activity_reporter_delegate.cc b/extensions/browser/api/power/activity_reporter_delegate.cc
+--- a/extensions/browser/api/power/activity_reporter_delegate.cc
++++ b/extensions/browser/api/power/activity_reporter_delegate.cc
+@@ -6,6 +6,7 @@
+ 
+ #include "build/build_config.h"
+ #include "build/chromeos_buildflags.h"
++#include "extensions/buildflags/buildflags.h"
+ 
+ #if BUILDFLAG(IS_CHROMEOS)
+ #include "extensions/browser/api/power/activity_reporter_delegate_ash.h"
+@@ -18,6 +19,8 @@ std::unique_ptr<ActivityReporterDelegate>
+ ActivityReporterDelegate::GetDelegate() {
+ #if BUILDFLAG(IS_CHROMEOS)
+   return std::make_unique<ActivityReporterDelegateAsh>();
++#elif BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
++  return nullptr;
+ #else
+ #error Unsupported platform
+ #endif
+diff --git a/extensions/browser/api/web_request/permission_helper.cc b/extensions/browser/api/web_request/permission_helper.cc
+--- a/extensions/browser/api/web_request/permission_helper.cc
++++ b/extensions/browser/api/web_request/permission_helper.cc
+@@ -64,7 +64,8 @@ void BrowserContextKeyedAPIFactory<
+   // implicitly depends upon those.
+   ExtensionsAPIClient* extensions_api_client = ExtensionsAPIClient::Get();
+ 
+-#if BUILDFLAG(IS_DESKTOP_ANDROID)
++#if BUILDFLAG(IS_DESKTOP_ANDROID) || \
++    BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+   // TODO(https://crbug.com/356905053): On Android, the startup and
+   // initialization flow is different.
+   // ExtensionsAPIClient is instantiated as part of the ExtensionsBrowserClient,
+diff --git a/extensions/common/command.cc b/extensions/common/command.cc
+--- a/extensions/common/command.cc
++++ b/extensions/common/command.cc
+@@ -19,6 +19,7 @@
+ #include "base/values.h"
+ #include "build/android_buildflags.h"
+ #include "build/build_config.h"
++#include "extensions/buildflags/buildflags.h"
+ #include "extensions/common/error_utils.h"
+ #include "extensions/common/extension.h"
+ #include "extensions/common/manifest_constants.h"
+@@ -119,7 +120,8 @@ std::string Command::CommandPlatform() {
+   return ui::kKeybindingPlatformChromeOs;
+ #elif BUILDFLAG(IS_LINUX)
+   return ui::kKeybindingPlatformLinux;
+-#elif BUILDFLAG(IS_DESKTOP_ANDROID)
++#elif BUILDFLAG(IS_DESKTOP_ANDROID) || \
++    BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+   // For now, we use linux keybindings on desktop android.
+   return ui::kKeybindingPlatformLinux;
+ #else
+diff --git a/extensions/renderer/bindings/api_binding_util.cc b/extensions/renderer/bindings/api_binding_util.cc
+--- a/extensions/renderer/bindings/api_binding_util.cc
++++ b/extensions/renderer/bindings/api_binding_util.cc
+@@ -12,6 +12,7 @@
+ #include "build/android_buildflags.h"
+ #include "build/build_config.h"
+ #include "build/chromeos_buildflags.h"
++#include "extensions/buildflags/buildflags.h"
+ #include "extensions/renderer/bindings/get_per_context_data.h"
+ #include "extensions/renderer/bindings/js_runner.h"
+ #include "gin/converter.h"
+@@ -148,7 +149,8 @@ std::string_view GetPlatformString() {
+   return "mac";
+ #elif BUILDFLAG(IS_WIN)
+   return "win";
+-#elif BUILDFLAG(IS_DESKTOP_ANDROID)
++#elif BUILDFLAG(IS_DESKTOP_ANDROID) || \
++    BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+   return "desktop_android";
+ #else
+   NOTREACHED();
+diff --git a/ui/webui/resources/BUILD.gn b/ui/webui/resources/BUILD.gn
+--- a/ui/webui/resources/BUILD.gn
++++ b/ui/webui/resources/BUILD.gn
+@@ -3,6 +3,7 @@
+ # found in the LICENSE file.
+ 
+ import("//crypto/features.gni")
++import("//extensions/buildflags/buildflags.gni")
+ import("//tools/grit/grit_rule.gni")
+ import("//ui/webui/resources/tools/generate_grd.gni")
+ import("//ui/webui/webui_features.gni")
+@@ -50,7 +51,8 @@ generate_grd("build_grd") {
+     "$target_gen_dir/mojo/resources.grdp",
+   ]
+ 
+-  if ((!is_android && !is_ios) || is_desktop_android) {
++  if ((!is_android && !is_ios) || is_desktop_android ||
++      enable_desktop_android_extensions) {
+     public_deps += [
+       "cr_components/cr_shortcut_input:build_grdp",
+       "cr_components/managed_footnote:build_grdp",
+diff --git a/ui/webui/resources/cr_components/cr_shortcut_input/BUILD.gn b/ui/webui/resources/cr_components/cr_shortcut_input/BUILD.gn
+--- a/ui/webui/resources/cr_components/cr_shortcut_input/BUILD.gn
++++ b/ui/webui/resources/cr_components/cr_shortcut_input/BUILD.gn
+@@ -4,8 +4,10 @@
+ 
+ import("//ui/webui/resources/tools/build_webui.gni")
+ import("//ui/webui/webui_features.gni")
++import("//extensions/buildflags/buildflags.gni")
+ 
+-assert(enable_webui_ntp || is_desktop_android)
++assert(enable_webui_ntp || is_desktop_android ||
++       enable_desktop_android_extensions)
+ 
+ build_webui("build") {
+   grd_prefix = "cr_components_cr_shortcut_input"
+diff --git a/ui/webui/resources/cr_components/managed_footnote/BUILD.gn b/ui/webui/resources/cr_components/managed_footnote/BUILD.gn
+--- a/ui/webui/resources/cr_components/managed_footnote/BUILD.gn
++++ b/ui/webui/resources/cr_components/managed_footnote/BUILD.gn
+@@ -4,8 +4,10 @@
+ 
+ import("//ui/webui/resources/tools/build_webui.gni")
+ import("//ui/webui/webui_features.gni")
++import("//extensions/buildflags/buildflags.gni")
+ 
+-assert(enable_webui_ntp || is_desktop_android)
++assert(enable_webui_ntp || is_desktop_android ||
++       enable_desktop_android_extensions)
+ 
+ build_webui("build") {
+   grd_prefix = "cr_components_managed_footnote"
+diff --git a/ui/webui/resources/cr_elements/BUILD.gn b/ui/webui/resources/cr_elements/BUILD.gn
+--- a/ui/webui/resources/cr_elements/BUILD.gn
++++ b/ui/webui/resources/cr_elements/BUILD.gn
+@@ -4,6 +4,7 @@
+ 
+ import("//ui/webui/resources/tools/build_webui.gni")
+ import("//ui/webui/webui_features.gni")
++import("//extensions/buildflags/buildflags.gni")
+ 
+ build_webui("build") {
+   grd_prefix = "webui_cr_elements"
+@@ -87,7 +88,8 @@ build_webui("build") {
+     ]
+   }
+ 
+-  if ((!is_android && !is_ios) || is_desktop_android) {
++  if ((!is_android && !is_ios) || is_desktop_android ||
++      enable_desktop_android_extensions) {
+     static_files = [ "cr_a11y_announcer/cr_a11y_announcer.css" ]
+     ts_files += [
+       "cr_radio_button/cr_radio_button_mixin_lit.ts",

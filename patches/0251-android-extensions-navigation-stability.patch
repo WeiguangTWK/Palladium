@@ -1,0 +1,330 @@
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/app/tab_activity_glue/ActivityTabWebContentsDelegateAndroid.java b/chrome/android/java/src/org/chromium/chrome/browser/app/tab_activity_glue/ActivityTabWebContentsDelegateAndroid.java
+index 0273d9e060ca..6dd9811a1666 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/app/tab_activity_glue/ActivityTabWebContentsDelegateAndroid.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/app/tab_activity_glue/ActivityTabWebContentsDelegateAndroid.java
+@@ -65,6 +65,8 @@ import org.chromium.chrome.browser.util.PictureInPictureWindowOptions;
+ import org.chromium.chrome.browser.util.WindowFeatures;
+ import org.chromium.components.embedder_support.contextmenu.ContextMenuUtils;
+ import org.chromium.components.embedder_support.delegate.WebContentsDelegateAndroid;
++import org.chromium.components.embedder_support.util.UrlConstants;
++import org.chromium.content_public.browser.LoadUrlParams;
+ import org.chromium.content_public.browser.RenderFrameHost;
+ import org.chromium.content_public.browser.WebContents;
+ import org.chromium.content_public.common.ResourceRequestBody;
+@@ -236,6 +238,32 @@ public class ActivityTabWebContentsDelegateAndroid extends TabWebContentsDelegat
+         return true;
+     }
+ 
++    private static boolean isExtensionPageNavigation(WebContents sourceWebContents, GURL targetUrl) {
++        if (sourceWebContents == null || targetUrl == null || targetUrl.isEmpty()) return false;
++
++        GURL sourceUrl = sourceWebContents.getLastCommittedUrl();
++        return sourceUrl != null
++                && UrlConstants.CHROME_EXTENSION_SCHEME.equals(sourceUrl.getScheme())
++                && !UrlConstants.CHROME_EXTENSION_SCHEME.equals(targetUrl.getScheme());
++    }
++
++    private @TabLaunchType int getLaunchTypeForExtensionPageLink(int disposition) {
++        switch (disposition) {
++            case WindowOpenDisposition.NEW_WINDOW:
++            case WindowOpenDisposition.NEW_POPUP:
++                return TabLaunchType.FROM_LINK_CREATING_NEW_WINDOW;
++            case WindowOpenDisposition.NEW_BACKGROUND_TAB:
++                return mTab.getTabGroupId() == null
++                        ? TabLaunchType.FROM_LONGPRESS_BACKGROUND
++                        : TabLaunchType.FROM_LONGPRESS_BACKGROUND_IN_GROUP;
++            case WindowOpenDisposition.NEW_FOREGROUND_TAB:
++            default:
++                return mTab.getTabGroupId() == null
++                        ? TabLaunchType.FROM_LONGPRESS_FOREGROUND
++                        : TabLaunchType.FROM_LONGPRESS_FOREGROUND_IN_GROUP;
++        }
++    }
++
+     @Override
+     protected boolean addNewContents(
+             WebContents sourceWebContents,
+@@ -251,6 +279,13 @@ public class ActivityTabWebContentsDelegateAndroid extends TabWebContentsDelegat
+         // Skip opening a new Tab if it doesn't make sense.
+         if (mTab.isClosing()) return false;
+ 
++        if (isExtensionPageNavigation(sourceWebContents, targetUrl)) {
++            LoadUrlParams loadUrlParams = new LoadUrlParams(targetUrl);
++            return tabCreator.createNewTab(
++                            loadUrlParams, getLaunchTypeForExtensionPageLink(disposition), mTab)
++                    != null;
++        }
++
+         if (ChromeFeatureList.isEnabled(ChromeFeatureList.DOCUMENT_PICTURE_IN_PICTURE_API)
+                 && disposition == WindowOpenDisposition.NEW_PICTURE_IN_PICTURE) {
+             assertNonNull(pictureInPictureWindowOptions);
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabmodel/TabCollectionTabModelImpl.java b/chrome/android/java/src/org/chromium/chrome/browser/tabmodel/TabCollectionTabModelImpl.java
+index 9b79421338da..3e05cfc96be6 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/tabmodel/TabCollectionTabModelImpl.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/tabmodel/TabCollectionTabModelImpl.java
+@@ -738,11 +738,16 @@ public class TabCollectionTabModelImpl extends TabModelJniBridge
+         assertOnUiThread();
+         TabModelImplUtil.setTabsMultiSelected(
+                 tabIds, isSelected, mMultiSelectedTabs, mTabModelObservers);
+-        assert mMultiSelectedTabs.isEmpty()
+-                        || TabModelUtils.getCurrentTabId(this) == Tab.INVALID_TAB_ID
+-                        || mMultiSelectedTabs.contains(TabModelUtils.getCurrentTabId(this))
+-                : "If the selection is not empty, the current tab must always be present within the"
+-                        + " set.";
++
++        int currentTabId = TabModelUtils.getCurrentTabId(this);
++        if (!mMultiSelectedTabs.isEmpty()
++                && currentTabId != Tab.INVALID_TAB_ID
++                && !mMultiSelectedTabs.contains(currentTabId)) {
++            // The active tab is implicitly considered selected. If a batched close/remove path
++            // switches focus to a tab outside the explicit multi-selection set, collapse the
++            // explicit selection back to the implicit single-tab state instead of asserting.
++            mMultiSelectedTabs.clear();
++        }
+     }
+ 
+     @Override
+diff --git a/chrome/browser/extensions/extension_context_menu_model.cc b/chrome/browser/extensions/extension_context_menu_model.cc
+index 876f47c0c903..5c653f1a464d 100644
+--- a/chrome/browser/extensions/extension_context_menu_model.cc
++++ b/chrome/browser/extensions/extension_context_menu_model.cc
+@@ -522,8 +522,11 @@ void ExtensionContextMenuModel::ExecuteCommand(int command_id,
+     }
+     case OPTIONS:
+       DCHECK(OptionsPageInfo::HasOptionsPage(extension));
+-      ExtensionTabUtil::OpenOptionsPageFromWebContents(extension,
+-                                                       GetActiveWebContents());
++      if (content::WebContents* web_contents = GetActiveWebContents()) {
++        ExtensionTabUtil::OpenOptionsPageFromWebContents(extension, web_contents);
++      } else {
++        ExtensionTabUtil::OpenOptionsPage(extension, browser_);
++      }
+       break;
+     case TOGGLE_VISIBILITY: {
+       bool visible = !is_pinned_;
+@@ -1064,7 +1067,17 @@ void ExtensionContextMenuModel::CreatePageAccessItems(
+ }
+ 
+ content::WebContents* ExtensionContextMenuModel::GetActiveWebContents() const {
+-  return TabListInterface::From(browser_)->GetActiveTab()->GetContents();
++  auto* tab_list = TabListInterface::From(browser_);
++  if (!tab_list) {
++    return nullptr;
++  }
++
++  auto* active_tab = tab_list->GetActiveTab();
++  if (!active_tab) {
++    return nullptr;
++  }
++
++  return active_tab->GetContents();
+ }
+ 
+ #if !BUILDFLAG(IS_ANDROID)
+diff --git a/chrome/browser/extensions/extension_tab_util.cc b/chrome/browser/extensions/extension_tab_util.cc
+index 08e658d64cdd..ae48d6e0a4a0 100644
+--- a/chrome/browser/extensions/extension_tab_util.cc
++++ b/chrome/browser/extensions/extension_tab_util.cc
+@@ -125,6 +125,24 @@ WindowController* WindowControllerFromBrowser(BrowserWindowInterface* browser) {
+   return BrowserExtensionWindowController::From(browser);
+ }
+ 
++#if BUILDFLAG(IS_ANDROID)
++bool OpenOptionsPageFallbackOnAndroid(BrowserWindowInterface* browser,
++                                      const GURL& url,
++                                      bool open_in_tab) {
++  if (!browser) {
++    return false;
++  }
++
++  content::OpenURLParams params(
++      url, content::Referrer(),
++      open_in_tab ? WindowOpenDisposition::NEW_FOREGROUND_TAB
++                  : WindowOpenDisposition::CURRENT_TAB,
++      ui::PAGE_TRANSITION_LINK, /*is_renderer_initiated=*/false);
++  browser->OpenURL(params, /*navigation_handle_callback=*/{});
++  return true;
++}
++#endif
++
+ // Use this function for reporting a tab id to an extension. It will
+ // take care of setting the id to TAB_ID_NONE if necessary (for
+ // example with devtools).
+@@ -1150,8 +1168,15 @@ bool ExtensionTabUtil::OpenOptionsPageFromWebContents(
+   BrowserWindowInterface* browser =
+       browser_window_util::GetBrowserForTabContents(*web_contents);
+   CHECK(browser);
++#if BUILDFLAG(IS_ANDROID)
++  if (WindowController* controller = WindowControllerFromBrowser(browser)) {
++    return controller->OpenOptionsPage(extension, *url, open_in_tab);
++  }
++  return OpenOptionsPageFallbackOnAndroid(browser, *url, open_in_tab);
++#else
+   return WindowControllerFromBrowser(browser)->OpenOptionsPage(extension, *url,
+                                                                open_in_tab);
++#endif
+ }
+ 
+ // static
+@@ -1173,8 +1198,15 @@ bool ExtensionTabUtil::OpenOptionsPage(const Extension* extension,
+     return false;
+   }
+   const bool open_in_tab = ShouldOpenInTab(extension);
++#if BUILDFLAG(IS_ANDROID)
++  if (WindowController* controller = WindowControllerFromBrowser(browser)) {
++    return controller->OpenOptionsPage(extension, *url, open_in_tab);
++  }
++  return OpenOptionsPageFallbackOnAndroid(browser, *url, open_in_tab);
++#else
+   return WindowControllerFromBrowser(browser)->OpenOptionsPage(extension, *url,
+                                                                open_in_tab);
++#endif
+ }
+ 
+ // static
+diff --git a/chrome/browser/extensions/extension_view_host_factory.cc b/chrome/browser/extensions/extension_view_host_factory.cc
+index 01021f4f4bf1..9cc753e14ba9 100644
+--- a/chrome/browser/extensions/extension_view_host_factory.cc
++++ b/chrome/browser/extensions/extension_view_host_factory.cc
+@@ -6,7 +6,6 @@
+ 
+ #include <string>
+ 
+-#include "base/debug/dump_without_crashing.h"
+ #include "base/notimplemented.h"
+ #include "chrome/browser/extensions/browser_extension_window_controller.h"
+ #include "chrome/browser/extensions/extension_view_host.h"
+@@ -139,7 +138,10 @@ class ExtensionViewHostTabDelegate : public ExtensionViewHost::Delegate {
+ // Delegate for ExtensionViewHost on Android.
+ class ExtensionViewHostDelegateAndroid : public ExtensionViewHost::Delegate {
+  public:
+-  ExtensionViewHostDelegateAndroid() = default;
++  explicit ExtensionViewHostDelegateAndroid(BrowserWindowInterface* browser)
++      : browser_(browser) {
++    DCHECK(browser_);
++  }
+   ExtensionViewHostDelegateAndroid(const ExtensionViewHostDelegateAndroid&) =
+       delete;
+   ExtensionViewHostDelegateAndroid& operator=(
+@@ -150,13 +152,7 @@ class ExtensionViewHostDelegateAndroid : public ExtensionViewHost::Delegate {
+       const content::OpenURLParams& params,
+       base::OnceCallback<void(content::NavigationHandle&)>
+           navigation_handle_callback) override {
+-    // TODO(cbrug.com/430430820): Investigate and remove if truly unused.
+-    //  Return nullptr for now. Initial investigations (see crrev.com/c/7214213)
+-    //  suggest that OpenURL methods within ExtensionViewHost::Delegate
+-    //  implementations are never actually called. This unblocks Android
+-    //  extension work while further analysis is conducted.
+-    base::debug::DumpWithoutCrashing();
+-    return nullptr;
++    return browser_->OpenURL(params, std::move(navigation_handle_callback));
+   }
+ 
+   content::KeyboardEventProcessingResult PreHandleKeyboardEvent(
+@@ -176,10 +172,11 @@ class ExtensionViewHostDelegateAndroid : public ExtensionViewHost::Delegate {
+   }
+ 
+   WindowController* GetExtensionWindowController() override {
+-    // TODO(cbrug.com/385987224): Implement this method for Android.
+-    NOTIMPLEMENTED();
+-    return nullptr;
++    return BrowserExtensionWindowController::From(browser_);
+   }
++
++ private:
++  raw_ptr<BrowserWindowInterface> browser_;
+ };
+ 
+ #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+@@ -255,7 +252,7 @@ std::unique_ptr<ExtensionViewHost> ExtensionViewHostFactory::CreatePopupHost(
+   auto delegate = std::make_unique<ExtensionViewHostBrowserDelegate>(
+       browser->GetBrowserForMigrationOnly());
+ #else   // BUILDFLAG(ENABLE_EXTENSIONS)
+-  auto delegate = std::make_unique<ExtensionViewHostDelegateAndroid>();
++  auto delegate = std::make_unique<ExtensionViewHostDelegateAndroid>(browser);
+ #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+ 
+   return CreateExtensionViewHost(extension, url, browser->GetProfile(),
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/ToolbarTabControllerImpl.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/ToolbarTabControllerImpl.java
+index 6272931cc147..8a565ee52fc3 100644
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/ToolbarTabControllerImpl.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/ToolbarTabControllerImpl.java
+@@ -83,7 +83,7 @@ public class ToolbarTabControllerImpl implements ToolbarTabController {
+                 && bottomControlsBackPressHandler.handleBackPress() == BackPressResult.SUCCESS) {
+             return true;
+         }
+-        Tab tab = mActivityTabSupplier.get();
++        Tab tab = getBackNavigableTab();
+         if (tab != null && tab.canGoBack()) {
+             NativePage nativePage = tab.getNativePage();
+             if (nativePage != null) {
+@@ -297,10 +297,18 @@ public class ToolbarTabControllerImpl implements ToolbarTabController {
+                         bottomControlsBackPressHandler.getHandleBackPressChangedSupplier().get())) {
+             return true;
+         }
+-        Tab tab = mActivityTabSupplier.get();
++        Tab tab = getBackNavigableTab();
+         return tab != null && tab.canGoBack();
+     }
+ 
++    private @Nullable Tab getBackNavigableTab() {
++        Tab tab = mActivityTabSupplier.get();
++        if (tab != null) {
++            return tab;
++        }
++        return mTabSupplier.get();
++    }
++
+     /** Record that homepage button was used for IPH reasons */
+     private void recordHomeButtonUseForIph() {
+         Tab tab = mTabSupplier.get();
+diff --git a/chrome/browser/ui/extensions/extension_action_view_model.cc b/chrome/browser/ui/extensions/extension_action_view_model.cc
+index c7f1e0f5c34f..72704174d398 100644
+--- a/chrome/browser/ui/extensions/extension_action_view_model.cc
++++ b/chrome/browser/ui/extensions/extension_action_view_model.cc
+@@ -32,7 +32,9 @@
+ #include "chrome/browser/ui/ui_features.h"
+ #include "chrome/grit/generated_resources.h"
+ #include "components/sessions/content/session_tab_helper.h"
++#include "content/public/browser/page_navigator.h"
+ #include "content/public/browser/web_contents.h"
++#include "content/public/common/referrer.h"
+ #include "extensions/browser/extension_action.h"
+ #include "extensions/browser/extension_action_manager.h"
+ #include "extensions/browser/extension_registry.h"
+@@ -44,6 +46,8 @@
+ #include "extensions/common/manifest_constants.h"
+ #include "ui/base/l10n/l10n_util.h"
+ #include "ui/base/models/image_model.h"
++#include "ui/base/page_transition_types.h"
++#include "ui/base/window_open_disposition.h"
+ #include "ui/color/color_provider_manager.h"
+ #include "ui/gfx/image/image_skia.h"
+ #include "ui/gfx/native_ui_types.h"
+@@ -630,6 +634,18 @@ void ExtensionActionViewModel::TriggerPopup(PopupShowAction show_action,
+ 
+   const GURL popup_url = extension_action_->GetPopupUrl(tab_id);
+ 
++#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
++  if (browser_) {
++    content::OpenURLParams params(
++        popup_url, content::Referrer(),
++        WindowOpenDisposition::NEW_FOREGROUND_TAB,
++        ui::PAGE_TRANSITION_AUTO_BOOKMARK, /*is_renderer_initiated=*/false);
++    browser_->OpenURL(params, /*navigation_handle_callback=*/{});
++  }
++  if (callback) {
++    std::move(callback).Run(/*popup_host=*/nullptr);
++  }
++#else
+   std::unique_ptr<extensions::ExtensionViewHost> host =
+       extensions::ExtensionViewHostFactory::CreatePopupHost(
+           *extension_, popup_url, browser_);
+@@ -639,6 +655,7 @@ void ExtensionActionViewModel::TriggerPopup(PopupShowAction show_action,
+ 
+   delegate_->TriggerPopup(std::move(host), show_action, by_user,
+                           std::move(callback));
++#endif
+ }
+ 
+ void ExtensionActionViewModel::CloseMenuTask() {
