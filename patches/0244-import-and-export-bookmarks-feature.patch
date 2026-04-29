@@ -576,3 +576,209 @@ index 63c3f7876ff9..83fc3262f400 100644
  #if !BUILDFLAG(IS_ANDROID)
    services.Add(RunOakSessionService);
    services.Add(RunProfileImporter);
+
+diff --git a/chrome/browser/bookmarks/android/bookmark_import_export_helper.h b/chrome/browser/bookmarks/android/bookmark_import_export_helper.h
+new file mode 100644
+index 000000000000..92605cb9e40f
+--- /dev/null
++++ b/chrome/browser/bookmarks/android/bookmark_import_export_helper.h
+@@ -0,0 +1,41 @@
++#ifndef CHROME_BROWSER_BOOKMARKS_ANDROID_BOOKMARK_IMPORT_EXPORT_HELPER_H_
++#define CHROME_BROWSER_BOOKMARKS_ANDROID_BOOKMARK_IMPORT_EXPORT_HELPER_H_
++
++#include "base/android/scoped_java_ref.h"
++#include "base/memory/raw_ptr.h"
++#include "base/memory/ref_counted.h"
++#include "chrome/browser/profiles/profile.h"
++#include "ui/shell_dialogs/select_file_dialog.h"
++
++class BookmarkImportExportHelper
++    : public ui::SelectFileDialog::Listener,
++      public base::RefCountedThreadSafe<BookmarkImportExportHelper> {
++ public:
++  explicit BookmarkImportExportHelper(Profile* profile);
++
++  bool Import(const base::android::JavaRef<jobject>& j_window);
++  bool Export(const base::android::JavaRef<jobject>& j_window);
++  bool InProgress();
++
++ private:
++  friend class base::RefCountedThreadSafe<BookmarkImportExportHelper>;
++
++  ~BookmarkImportExportHelper() override;
++
++  void FileSelected(const ui::SelectedFileInfo& file, int index) override;
++  void FileSelectionCanceled() override;
++
++  void ImportFileSelected(const ui::SelectedFileInfo& file, int index);
++  void ExportFileSelected(const ui::SelectedFileInfo& file, int index);
++  void ShowSelectFileDialog(ui::SelectFileDialog::Type type,
++                            const base::FilePath& default_path);
++  void CleanupFileDialog();
++  bool EditBookmarksEnabled();
++
++  base::android::ScopedJavaGlobalRef<jobject> j_window_;
++  scoped_refptr<ui::SelectFileDialog> select_file_dialog_;
++  raw_ptr<Profile> profile_ = nullptr;
++  bool is_import_ = true;
++};
++
++#endif  // CHROME_BROWSER_BOOKMARKS_ANDROID_BOOKMARK_IMPORT_EXPORT_HELPER_H_
++
++diff --git a/chrome/browser/bookmarks/android/bookmark_import_export_helper.cc b/chrome/browser/bookmarks/android/bookmark_import_export_helper.cc
++new file mode 100644
++index 000000000000..dde18ae8d8e0
++--- /dev/null
++++ b/chrome/browser/bookmarks/android/bookmark_import_export_helper.cc
++@@ -0,0 +1,151 @@
+++#include "chrome/browser/bookmarks/android/bookmark_import_export_helper.h"
+++
+++#include <vector>
+++
+++#include "base/functional/callback_helpers.h"
+++#include "base/i18n/file_util_icu.h"
+++#include "base/i18n/time_formatting.h"
+++#include "base/path_service.h"
+++#include "base/task/thread_pool.h"
+++#include "chrome/browser/bookmarks/bookmark_html_writer.h"
+++#include "chrome/browser/importer/external_process_importer_host.h"
+++#include "chrome/browser/importer/profile_writer.h"
+++#include "chrome/browser/ui/select_file_policy/chrome_select_file_policy.h"
+++#include "chrome/common/chrome_paths.h"
+++#include "chrome/grit/generated_resources.h"
+++#include "components/bookmarks/common/bookmark_pref_names.h"
+++#include "components/user_data_importer/common/importer_data_types.h"
+++#include "components/user_prefs/user_prefs.h"
+++#include "content/public/browser/browser_thread.h"
+++#include "ui/android/window_android.h"
+++#include "ui/base/l10n/l10n_util.h"
+++#include "ui/shell_dialogs/selected_file_info.h"
+++
+++namespace {
+++
+++base::FilePath GetDefaultFilepathForBookmarkExport() {
+++  const std::string filename = l10n_util::GetStringFUTF8(
+++      IDS_EXPORT_BOOKMARKS_DEFAULT_FILENAME,
+++      base::TimeFormatShortDateNumeric(base::Time::Now()));
+++  base::FilePath path = base::FilePath::FromUTF8Unsafe(filename);
+++  base::FilePath::StringType path_str = path.value();
+++  base::i18n::ReplaceIllegalCharactersInPath(&path_str, '_');
+++  base::FilePath default_path;
+++  base::PathService::Get(chrome::DIR_USER_DOCUMENTS, &default_path);
+++  return default_path.Append(base::FilePath(path_str));
+++}
+++
+++}  // namespace
+++
+++BookmarkImportExportHelper::BookmarkImportExportHelper(Profile* profile)
+++    : profile_(profile) {}
+++
+++BookmarkImportExportHelper::~BookmarkImportExportHelper() {
+++  if (select_file_dialog_) {
+++    select_file_dialog_->ListenerDestroyed();
+++  }
+++}
+++
+++bool BookmarkImportExportHelper::Import(
+++    const base::android::JavaRef<jobject>& j_window) {
+++  j_window_ = j_window;
+++  if (!ui::WindowAndroid::FromJavaWindowAndroid(j_window) ||
+++      !EditBookmarksEnabled()) {
+++    return false;
+++  }
+++  is_import_ = true;
+++  ShowSelectFileDialog(ui::SelectFileDialog::SELECT_OPEN_FILE, base::FilePath());
+++  return true;
+++}
+++
+++bool BookmarkImportExportHelper::Export(
+++    const base::android::JavaRef<jobject>& j_window) {
+++  j_window_ = j_window;
+++  if (!ui::WindowAndroid::FromJavaWindowAndroid(j_window)) {
+++    return false;
+++  }
+++  is_import_ = false;
+++  base::ThreadPool::PostTaskAndReplyWithResult(
+++      FROM_HERE,
+++      {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
+++       base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
+++      base::BindOnce(&GetDefaultFilepathForBookmarkExport),
+++      base::BindOnce(&BookmarkImportExportHelper::ShowSelectFileDialog, this,
+++                     ui::SelectFileDialog::SELECT_SAVEAS_FILE));
+++  return true;
+++}
+++
+++bool BookmarkImportExportHelper::InProgress() {
+++  return !!select_file_dialog_;
+++}
+++
+++void BookmarkImportExportHelper::FileSelected(
+++    const ui::SelectedFileInfo& file,
+++    int index) {
+++  if (is_import_) {
+++    ImportFileSelected(file, index);
+++  } else {
+++    ExportFileSelected(file, index);
+++  }
+++}
+++
+++void BookmarkImportExportHelper::FileSelectionCanceled() {
+++  CleanupFileDialog();
+++}
+++
+++void BookmarkImportExportHelper::ImportFileSelected(
+++    const ui::SelectedFileInfo& file,
+++    int index) {
+++  user_data_importer::SourceProfile source_profile;
+++  source_profile.importer_type = user_data_importer::TYPE_BOOKMARKS_FILE;
+++  source_profile.source_path = file.path();
+++
+++  auto* importer_host = new ExternalProcessImporterHost;
+++  importer_host->StartImportSettings(source_profile, profile_,
+++                                     user_data_importer::FAVORITES,
+++                                     new ProfileWriter(profile_));
+++  CleanupFileDialog();
+++}
+++
+++void BookmarkImportExportHelper::ExportFileSelected(
+++    const ui::SelectedFileInfo& file,
+++    int index) {
+++  bookmark_html_writer::WriteBookmarks(profile_, file.path(), base::DoNothing());
+++  CleanupFileDialog();
+++}
+++
+++void BookmarkImportExportHelper::ShowSelectFileDialog(
+++    ui::SelectFileDialog::Type type,
+++    const base::FilePath& default_path) {
+++  if (select_file_dialog_) {
+++    return;
+++  }
+++  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+++  AddRef();
+++  select_file_dialog_ = ui::SelectFileDialog::Create(
+++      this, std::make_unique<ChromeSelectFilePolicy>(nullptr));
+++  std::vector<std::u16string> mime_types;
+++  mime_types.push_back(u"text/html");
+++  select_file_dialog_->SetAcceptTypes(mime_types);
+++  ui::SelectFileDialog::FileTypeInfo file_type_info;
+++  file_type_info.extensions.resize(1);
+++  file_type_info.extensions[0].push_back(FILE_PATH_LITERAL("html"));
+++  select_file_dialog_->SelectFile(
+++      type, std::u16string(), default_path, &file_type_info, 0,
+++      base::FilePath::StringType(),
+++      ui::WindowAndroid::FromJavaWindowAndroid(j_window_));
+++}
+++
+++void BookmarkImportExportHelper::CleanupFileDialog() {
+++  if (select_file_dialog_) {
+++    select_file_dialog_->ListenerDestroyed();
+++  }
+++  select_file_dialog_.reset();
+++  j_window_.Reset();
+++  Release();
+++}
+++
+++bool BookmarkImportExportHelper::EditBookmarksEnabled() {
+++  return user_prefs::UserPrefs::Get(profile_)->GetBoolean(
+++      bookmarks::prefs::kEditBookmarksEnabled);
+++}
