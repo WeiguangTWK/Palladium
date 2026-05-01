@@ -1,0 +1,29 @@
+diff --git a/components/browser_ui/site_settings/android/java/res/xml/site_settings_preferences.xml b/components/browser_ui/site_settings/android/java/res/xml/site_settings_preferences.xml
+index aedb1aaa3781..ecf6ec57734e 100644
+--- a/components/browser_ui/site_settings/android/java/res/xml/site_settings_preferences.xml
++++ b/components/browser_ui/site_settings/android/java/res/xml/site_settings_preferences.xml
+@@ -123,6 +123,10 @@ The order of the following items is from: http://crbug.com/610358.
+     <org.chromium.components.browser_ui.settings.ChromeBasePreference
+         android:fragment="org.chromium.components.browser_ui.site_settings.SingleCategorySettings"
+         android:key="javascript" />
++    <!-- JavaScript JIT -->
++    <org.chromium.components.browser_ui.settings.ChromeBasePreference
++        android:fragment="org.chromium.components.browser_ui.site_settings.SingleCategorySettings"
++        android:key="javascript_jit" />
+     <!-- Popups -->
+     <org.chromium.components.browser_ui.settings.ChromeBasePreference
+         android:fragment="org.chromium.components.browser_ui.site_settings.SingleCategorySettings"
+diff --git a/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/JavascriptJitSettingsHooks.java b/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/JavascriptJitSettingsHooks.java
+index 6e7c250268f6..feacce9789cf 100644
+--- a/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/JavascriptJitSettingsHooks.java
++++ b/components/browser_ui/site_settings/android/java/src/org/chromium/components/browser_ui/site_settings/JavascriptJitSettingsHooks.java
+@@ -112,6 +112,9 @@ public final class JavascriptJitSettingsHooks {
+                 @NonNull SiteSettingsDelegate siteSettingsDelegate,
+                 @SiteSettingsCategory.Type int categoryType,
+                 @Nullable Preference existingPreference) {
++            if (existingPreference != null) {
++                return;
++            }
+             ChromeBasePreference pref = defaultCreatePreference(siteSettingsFragment, commonPrefKey());
+             addPreference(siteSettingsFragment, siteSettingsDelegate, categoryType, pref);
+         }
