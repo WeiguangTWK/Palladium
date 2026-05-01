@@ -1,0 +1,41 @@
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/search/SettingsSearchCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/search/SettingsSearchCoordinator.java
+index 3b9e369d32e8..cc6589e611fb 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/settings/search/SettingsSearchCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/search/SettingsSearchCoordinator.java
+@@ -427,7 +427,7 @@ public class SettingsSearchCoordinator
+         mHandler.post(
+                 () -> {
+                     if (mFragmentState != FS_SETTINGS) return;
+-                    searchBox.setVisibility(isShowingMainSettings() ? View.VISIBLE : View.GONE);
++                    searchBox.setVisibility(View.VISIBLE);
+                 });
+ 
+         // Controls search UI visibility in single-column mode.
+@@ -439,7 +439,7 @@ public class SettingsSearchCoordinator
+                             public void onPanelOpened(View panel) {
+                                 if (mUseMultiColumn) return;
+ 
+-                                showUiInSingleColumn(searchBox, /* show= */ false);
++                                showUiInSingleColumn(searchBox, /* show= */ true);
+                                 disableBackgroundTalkbackNavigation();
+                             }
+ 
+@@ -1168,16 +1168,8 @@ public class SettingsSearchCoordinator
+             setSearchBoxVerticalMargin(searchBox, false);
+             appBarLayout.addView(searchBox);
+             boolean showingMain = isShowingMainSettings();
+-            if (showingMain) {
+-                // No need to check against |mSuppressUi| here since in single-column mode
+-                // search UI is always hidden except at main settings in which the UI is
+-                // never suppressed.
+-                if (mFragmentState == FS_SETTINGS) {
+-                    searchBox.setVisibility(View.VISIBLE);
+-                }
+-            } else {
+-                searchBox.setVisibility(View.GONE);
+-                query.setVisibility(View.GONE);
++            if (mFragmentState == FS_SETTINGS) {
++                searchBox.setVisibility(View.VISIBLE);
+             }
+             // Query edit UI should be hidden while we're browsing results.
+             if (mFragmentState == FS_RESULTS) query.setVisibility(View.GONE);
