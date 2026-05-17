@@ -1,0 +1,61 @@
+diff --git a/chrome/browser/extensions/api/tabs/tabs_api.cc b/chrome/browser/extensions/api/tabs/tabs_api.cc
+index 3a1c35bbb468f..ad91e856fb3d2 100644
+--- a/chrome/browser/extensions/api/tabs/tabs_api.cc
++++ b/chrome/browser/extensions/api/tabs/tabs_api.cc
+@@ -124,6 +124,8 @@ constexpr char kCannotFindTabToDiscard[] = "Cannot find a tab to discard.";
+ constexpr char kCannotUnhighlightAllTabsError[] =
+     "Cannot unhighlight all tabs.";
+ constexpr char kAndroidActionFallbackQueryKey[] = "chromium_action_fallback";
++constexpr char kAndroidActionFallbackTabIdQueryKey[] =
++    "chromium_action_fallback_tab_id";
+ #if !BUILDFLAG(IS_ANDROID)
+ constexpr char kWindowCreateSupportsOnlySingleIwaUrlError[] =
+     "When creating a window for a URL with the 'isolated-app:' scheme, only "
+@@ -230,12 +232,22 @@ std::optional<int> GetActionFallbackOpenerTabId(content::WebContents* contents)
+     return std::nullopt;
+   }
+ 
++  std::string tab_id_value;
++  int tab_id = -1;
++  if (net::GetValueForKeyInQuery(url, kAndroidActionFallbackTabIdQueryKey,
++                                 &tab_id_value) &&
++      base::StringToInt(tab_id_value, &tab_id) && tab_id >= 0) {
++    return tab_id;
++  }
++
++  // Backward compatibility for existing Android popup fallback URLs that
++  // stored the opener tab ID in the fragment.
+   const std::string ref(url.ref().data(), url.ref().size());
+   if (!base::StartsWith(ref, "tab")) {
+     return std::nullopt;
+   }
+ 
+-  int tab_id = -1;
++  tab_id = -1;
+   if (!base::StringToInt(ref.substr(3), &tab_id) || tab_id < 0) {
+     return std::nullopt;
+   }
+diff --git a/chrome/browser/ui/extensions/extension_action_view_model.cc b/chrome/browser/ui/extensions/extension_action_view_model.cc
+index 7ff1e34f18a82..455b79c78a35e 100644
+--- a/chrome/browser/ui/extensions/extension_action_view_model.cc
++++ b/chrome/browser/ui/extensions/extension_action_view_model.cc
+@@ -72,13 +72,16 @@ using extensions::PermissionsManager;
+ namespace {
+ 
+ constexpr char kAndroidActionFallbackQueryKey[] = "chromium_action_fallback";
++constexpr char kAndroidActionFallbackTabIdQueryKey[] =
++    "chromium_action_fallback_tab_id";
+ 
+ GURL GetAndroidPopupFallbackUrl(const GURL& popup_url, int tab_id) {
+   GURL url =
+       net::AppendQueryParameter(popup_url, kAndroidActionFallbackQueryKey, "1");
+-  if (tab_id >= 0 && !url.has_ref()) {
+-    url = net::AppendOrReplaceRef(
+-        url, base::StrCat({"tab", base::NumberToString(tab_id)}));
++  if (tab_id >= 0) {
++    url = net::AppendQueryParameter(
++        url, kAndroidActionFallbackTabIdQueryKey,
++        base::NumberToString(tab_id));
+   }
+   return url;
+ }

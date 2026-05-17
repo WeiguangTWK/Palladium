@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenAI Codex <codex@openai.com>
+Date: Fri, 15 May 2026 14:20:00 +0800
+Subject: [PATCH] Fix NGShapeCache reuse for context-sensitive shaping
+
+---
+ .../blink/renderer/core/layout/inline/inline_node.cc    | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/third_party/blink/renderer/core/layout/inline/inline_node.cc b/third_party/blink/renderer/core/layout/inline/inline_node.cc
+index 7cb5320e979d4..a01bce115ee2e 100644
+--- a/third_party/blink/renderer/core/layout/inline/inline_node.cc
++++ b/third_party/blink/renderer/core/layout/inline/inline_node.cc
+@@ -168,7 +168,8 @@ class ReusingTextShaper final {
+     auto ShapeFunc = [&]() -> ShaperResult {
+       return ShapeWithoutCache(start_item, font, end_offset);
+     };
+-    if (allow_shape_cache_) {
++    if (allow_shape_cache_ && !options_.is_line_start &&
++        !options_.han_kerning_start) {
+       const LayoutLocale* locale = font.GetFontDescription().Locale();
+       return font.PrimaryFont()->GetShapeCache().GetOrCreate(
+           ShapeCacheKey(shaper_.GetText(), start_item.StartOffset(), end_offset,
