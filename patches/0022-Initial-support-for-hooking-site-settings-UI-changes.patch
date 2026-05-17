@@ -407,7 +407,7 @@ index d335c6e2ea9ed..b51d43d085ab4 100644
  
          /** Number of handled categories used for calculating array sizes. */
 -        int NUM_ENTRIES = 39;
-+        int NUM_ENTRIES_CHROMIUM = 39;
++        int NUM_ENTRIES_CHROMIUM = 38;
 +
 +        // Three lines of placeholder comment to minimize cascading conflicts.
 +        // Three lines of placeholder comment to minimize cascading conflicts.

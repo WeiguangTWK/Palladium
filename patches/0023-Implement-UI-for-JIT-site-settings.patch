@@ -212,7 +212,7 @@ index b51d43d085ab4..05b8ef43302e4 100644
          // Three lines of placeholder comment to minimize cascading conflicts.
 @@ -138,6 +142,10 @@ public class SiteSettingsCategory {
          /** Number of handled categories used for calculating array sizes. */
-         int NUM_ENTRIES_CHROMIUM = 39;
+         int NUM_ENTRIES_CHROMIUM = 38;
  
 +        // Three lines of placeholder comment to minimize cascading conflicts.
 +        // Three lines of placeholder comment to minimize cascading conflicts.

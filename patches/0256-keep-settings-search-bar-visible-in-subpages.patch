@@ -11,12 +11,13 @@ index 3b9e369d32e8..cc6589e611fb 100644
                  });
  
          // Controls search UI visibility in single-column mode.
-@@ -439,7 +439,7 @@ public class SettingsSearchCoordinator
+@@ -439,7 +439,8 @@ public class SettingsSearchCoordinator
                              public void onPanelOpened(View panel) {
                                  if (mUseMultiColumn) return;
  
 -                                showUiInSingleColumn(searchBox, /* show= */ false);
-+                                showUiInSingleColumn(searchBox, /* show= */ true);
++                                mMultiColumnSettings.getMainSettings().saveListState();
++                                showUiInSingleColumn(searchBox, /* show= */ false);
                                  disableBackgroundTalkbackNavigation();
                              }
  

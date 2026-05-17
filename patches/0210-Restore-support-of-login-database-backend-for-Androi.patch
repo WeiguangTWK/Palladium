@@ -4,13 +4,13 @@ Date: Sun, 14 Sep 2025 16:03:24 +0000
 Subject: [PATCH] Restore support of login database backend for Android
 
 ---
- .../password_store_backend_factory.cc         | 15 ++++--
+ .../password_store_backend_factory.cc         | 20 ++++++---
  .../core/browser/password_store/BUILD.gn      | 54 +++++++++----------
  .../browser/password_store/login_database.cc  |  2 +-
  .../password_store/login_database_posix.cc    | 10 ++--
  .../browser/password_store_factory_util.cc    | 14 ++---
  .../browser/password_store_factory_util.h     | 10 ++--
- 6 files changed, 57 insertions(+), 48 deletions(-)
+ 6 files changed, 62 insertions(+), 48 deletions(-)
 
 diff --git a/chrome/browser/password_manager/factories/password_store_backend_factory.cc b/chrome/browser/password_manager/factories/password_store_backend_factory.cc
 index f6c2a0314e60b..10fa1a686b653 100644
@@ -31,8 +31,9 @@ index f6c2a0314e60b..10fa1a686b653 100644
 -#else  // BUILDFLAG(IS_ANDROID)
 +#endif  // BUILDFLAG(IS_ANDROID)
 +#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(USE_LOGIN_DATABASE_AS_BACKEND)
- #include "components/password_manager/core/browser/password_store/login_database.h"
- #include "components/password_manager/core/browser/password_store/password_store_built_in_backend.h"
++#include "components/affiliations/core/browser/affiliation_service.h"
++#include "components/password_manager/core/browser/password_store/login_database.h"
++#include "components/password_manager/core/browser/password_store/password_store_built_in_backend.h"
 -#endif  // BUILDFLAG(IS_ANDROID)
 +#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(USE_LOGIN_DATABASE_AS_BACKEND)
  
@@ -62,8 +63,15 @@ index f6c2a0314e60b..10fa1a686b653 100644
    auto behavior = is_account_store
                        ? syncer::WipeModelUponSyncDisabledBehavior::kAlways
                        : syncer::WipeModelUponSyncDisabledBehavior::kNever;
-   return std::make_unique<password_manager::PasswordStoreBuiltInBackend>(
-       std::move(login_db), behavior, prefs, os_crypt_async);
++  CHECK(affiliation_service);
++  auto affiliated_match_helper =
++      std::make_unique<password_manager::AffiliatedMatchHelper>(
++          affiliation_service);
+-  return std::make_unique<password_manager::PasswordStoreBuiltInBackend>(
+-      std::move(login_db), behavior, prefs, os_crypt_async);
++  return std::make_unique<password_manager::PasswordStoreBuiltInBackend>(
++      std::move(login_db), behavior, prefs, os_crypt_async,
++      std::move(affiliated_match_helper));
 -#endif  // BUILDFLAG(IS_ANDROID)
 +#endif  // BUILDFLAG(IS_ANDROID) && !BUILDFLAG(USE_LOGIN_DATABASE_AS_BACKEND)
  }

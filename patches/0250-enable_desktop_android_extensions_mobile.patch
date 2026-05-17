@@ -270,7 +270,7 @@ diff --git a/ui/webui/resources/BUILD.gn b/ui/webui/resources/BUILD.gn
  
 -  if ((!is_android && !is_ios) || is_desktop_android) {
 +  if ((!is_android && !is_ios) || is_desktop_android ||
-+      enable_desktop_android_extensions) {
++      enable_webui_ntp || enable_desktop_android_extensions) {
      public_deps += [
        "cr_components/cr_shortcut_input:build_grdp",
        "cr_components/managed_footnote:build_grdp",
@@ -304,24 +304,3 @@ diff --git a/ui/webui/resources/cr_components/managed_footnote/BUILD.gn b/ui/web
  
  build_webui("build") {
    grd_prefix = "cr_components_managed_footnote"
-diff --git a/ui/webui/resources/cr_elements/BUILD.gn b/ui/webui/resources/cr_elements/BUILD.gn
---- a/ui/webui/resources/cr_elements/BUILD.gn
-+++ b/ui/webui/resources/cr_elements/BUILD.gn
-@@ -4,6 +4,7 @@
- 
- import("//ui/webui/resources/tools/build_webui.gni")
- import("//ui/webui/webui_features.gni")
-+import("//extensions/buildflags/buildflags.gni")
- 
- build_webui("build") {
-   grd_prefix = "webui_cr_elements"
-@@ -87,7 +88,8 @@ build_webui("build") {
-     ]
-   }
- 
--  if ((!is_android && !is_ios) || is_desktop_android) {
-+  if ((!is_android && !is_ios) || is_desktop_android ||
-+      enable_desktop_android_extensions) {
-     static_files = [ "cr_a11y_announcer/cr_a11y_announcer.css" ]
-     ts_files += [
-       "cr_radio_button/cr_radio_button_mixin_lit.ts",

@@ -187,6 +187,10 @@ index 1b3f45beb699..585e3010186a 100644
 -                        .with(
 -                                ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_ICON,
 -                                contextMenuIcon)
++                        .with(
++                                ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_ON_CLICK,
++                                (view) ->
++                                        onContextMenuButtonClicked((ListMenuButton) view, entry.id))
 +                        .with(ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_VISIBLE, false)
                          .with(
                                  ExtensionsMenuItemProperties.PRIMARY_ACTION_ON_CLICK,
@@ -203,26 +207,32 @@ index 1b3f45beb699..585e3010186a 100644
              PropertyModel itemModel, ExtensionsMenuTypes.MenuEntryState itemState) {
          itemModel.set(ExtensionsMenuItemProperties.TITLE, itemState.actionButton.text);
          itemModel.set(ExtensionsMenuItemProperties.ICON, itemState.actionButton.icon);
--        itemModel.set(
--                ExtensionsMenuItemProperties.SITE_ACCESS_TOGGLE_CHECKED,
--                itemState.siteAccessToggle.isOn);
-         itemModel.set(
-                 ExtensionsMenuItemProperties.SITE_ACCESS_TOGGLE_STATUS,
--                itemState.siteAccessToggle.status);
--        itemModel.set(
--                ExtensionsMenuItemProperties.SITE_ACCESS_TOGGLE_TOOLTIP,
--                itemState.siteAccessToggle.tooltipText);
++        itemModel.set(ExtensionsMenuItemProperties.IS_PINNED, itemState.contextMenuButton.isOn);
++        itemModel.set(
++                ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_ACCESSIBLE_NAME,
++                itemState.contextMenuButton.accessibleName);
++        itemModel.set(
++                ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_ICON,
++                R.drawable.ic_more_vert_24dp);
++        itemModel.set(
++                ExtensionsMenuItemProperties.CONTEXT_MENU_BUTTON_VISIBLE,
++                itemState.contextMenuButton.status != ExtensionsMenuTypes.ControlState.Status.HIDDEN);
++        itemModel.set(
++                ExtensionsMenuItemProperties.SITE_ACCESS_TOGGLE_STATUS,
 +                ExtensionsMenuTypes.ControlState.Status.HIDDEN);
-         itemModel.set(
-                 ExtensionsMenuItemProperties.SITE_PERMISSIONS_BUTTON_ACCESSIBLE_NAME,
-                 itemState.sitePermissionsButton.accessibleName);
-         itemModel.set(
-                 ExtensionsMenuItemProperties.SITE_PERMISSIONS_BUTTON_STATUS,
--                itemState.sitePermissionsButton.status);
--        itemModel.set(
--                ExtensionsMenuItemProperties.SITE_PERMISSIONS_BUTTON_TEXT,
--                itemState.sitePermissionsButton.text);
-+                ExtensionsMenuTypes.ControlState.Status.HIDDEN);
++        itemModel.set(
++                ExtensionsMenuItemProperties.SITE_PERMISSIONS_BUTTON_ACCESSIBLE_NAME,
++                itemState.sitePermissionsButton.accessibleName);
++        itemModel.set(
++                ExtensionsMenuItemProperties.SITE_PERMISSIONS_BUTTON_STATUS,
++                itemState.sitePermissionsButton.status);
++        itemModel.set(
++                ExtensionsMenuItemProperties.SITE_PERMISSIONS_BUTTON_TEXT,
++                itemState.sitePermissionsButton.text);
++        itemModel.set(
++                ExtensionsMenuItemProperties.SITE_PERMISSIONS_BUTTON_TOOLTIP,
++                itemState.sitePermissionsButton.tooltipText);
++        itemModel.set(ExtensionsMenuItemProperties.IS_ENTERPRISE, itemState.isEnterprise);
      }
  
      /**
